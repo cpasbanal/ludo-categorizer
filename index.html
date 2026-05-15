@@ -534,6 +534,44 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   /* Dashboard two-col → 1 col */
   #dashboard-grid { grid-template-columns: 1fr !important; }
 }
+
+/* ===== LOADING OVERLAY ===== */
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(4px);
+  z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+}
+.loading-spinner {
+  width: 44px; height: 44px;
+  border: 3px solid var(--border);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+
+/* ===== CONNECTION DOT ===== */
+.conn-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block; margin-left: auto; flex-shrink: 0;
+}
+.conn-dot.ok           { background: #4CAF50; box-shadow: 0 0 5px rgba(76,175,80,0.7); }
+.conn-dot.error        { background: #f44336; }
+.conn-dot.unconfigured { background: rgba(255,255,255,0.2); }
+
+/* ===== SETTINGS STATUS ===== */
+.settings-status {
+  font-size: 0.82rem; font-weight: 600; padding: 8px 12px;
+  border-radius: var(--r-sm); margin-top: 12px;
+}
+.settings-status:empty { display: none; }
+.settings-status.ok      { background: var(--green-light); color: var(--green-dark); border: 1px solid var(--green-muted); }
+.settings-status.error   { background: #FFEBEE; color: #C62828; border: 1px solid #FFCDD2; }
+.settings-status.testing { background: var(--blue-light); color: var(--blue); border: 1px solid #BBDEFB; }
 </style>
 </head>
 <body>
@@ -569,6 +607,11 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
       </div>
       <div class="nav-item" onclick="openAddGame()">
         <span class="nav-icon">+</span> Ajouter un jeu
+      </div>
+      <div class="nav-section">Configuration</div>
+      <div class="nav-item" onclick="showPage('settings')">
+        <span class="nav-icon">⚙</span> Paramètres
+        <span class="conn-dot unconfigured" id="conn-dot"></span>
       </div>
     </nav>
     <div class="stats-mini" id="sidebar-stats">
@@ -807,7 +850,78 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
       </div>
     </div>
 
+    <!-- SETTINGS -->
+    <div id="page-settings" class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <div class="page-title">Paramètres</div>
+        </div>
+      </div>
+      <div style="padding: 24px; max-width: 640px;">
+
+        <div class="card">
+          <div class="card-title"><span class="icon">🔗</span> Connexion Notion</div>
+          <div class="notion-info">
+            Connectez une base de données Notion pour sauvegarder vos jeux dans le cloud et y accéder depuis n'importe quel appareil.<br>
+            1. Créez une intégration sur <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a><br>
+            2. Copiez le token de l'intégration ci-dessous<br>
+            3. Partagez votre base de données avec l'intégration<br>
+            4. Copiez l'ID de la base (32 caractères dans l'URL)
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Token d'intégration</label>
+              <input type="password" id="settings-token" placeholder="secret_xxxxxxxxxxxx" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>ID de la base de données</label>
+              <input type="text" id="settings-dbid" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+            </div>
+          </div>
+          <div id="settings-status" class="settings-status"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="testNotionConnection()">🔌 Tester la connexion</button>
+            <button class="btn btn-primary" onclick="saveSettingsAndSync()">💾 Sauvegarder &amp; Synchroniser</button>
+            <button class="btn btn-danger" onclick="clearNotionSettings()">Déconnecter</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">📋</span> Structure attendue dans Notion</div>
+          <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:12px;line-height:1.6;">
+            Créez une base de données Notion avec ces propriétés (noms exacts) :
+          </p>
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:0.7rem;letter-spacing:.06em;text-transform:uppercase;">Propriété</th>
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:0.7rem;letter-spacing:.06em;text-transform:uppercase;">Type</th>
+                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:0.7rem;letter-spacing:.06em;text-transform:uppercase;">Valeurs</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Nom</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Titre</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">Nom du jeu (requis)</td></tr>
+              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Propriétaire</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Sélection</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">J, M, FR, JM</td></tr>
+              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Catégorie</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Sélection</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">Nom de la catégorie</td></tr>
+              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Joueurs</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Texte</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">ex : 2-6</td></tr>
+              <tr><td style="padding:7px 10px;font-weight:700;">Durée</td><td style="padding:7px 10px;"><span class="cat-chip">Texte</span></td><td style="padding:7px 10px;color:var(--muted);">ex : 30-60 min</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
   </main>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" class="loading-overlay" style="display:none;">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Synchronisation avec Notion…</div>
 </div>
 
 <!-- MODAL: ADD GAME -->
@@ -928,6 +1042,92 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 
 <script>
 // ============================
+// SETTINGS
+// ============================
+let settings = { notionToken: '', notionDbId: '' };
+
+function loadSettings() {
+  try { settings = { notionToken: '', notionDbId: '', ...JSON.parse(localStorage.getItem('ludo_settings') || '{}') }; } catch(e) {}
+}
+function persistSettings() {
+  localStorage.setItem('ludo_settings', JSON.stringify(settings));
+}
+
+// ============================
+// NOTION API
+// ============================
+class NotionAPI {
+  constructor(token, dbId) {
+    this.token = token;
+    const raw = dbId.replace(/-/g, '');
+    this.dbId = raw.length === 32
+      ? raw.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5')
+      : dbId;
+    this.h = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Notion-Version': '2022-06-28',
+    };
+  }
+
+  async _req(path, opts = {}) {
+    const r = await fetch(`https://api.notion.com/v1${path}`, { headers: this.h, ...opts });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.message || `HTTP ${r.status}`);
+    }
+    return r.json();
+  }
+
+  async testConnection() { return this._req(`/databases/${this.dbId}`); }
+
+  async queryAll() {
+    const pages = [];
+    let cursor = null;
+    do {
+      const body = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+      const data = await this._req(`/databases/${this.dbId}/query`, { method: 'POST', body: JSON.stringify(body) });
+      pages.push(...data.results);
+      cursor = data.has_more ? data.next_cursor : null;
+    } while (cursor);
+    return pages;
+  }
+
+  async create(game, catName) {
+    return this._req('/pages', {
+      method: 'POST',
+      body: JSON.stringify({ parent: { database_id: this.dbId }, properties: this._props(game, catName) }),
+    });
+  }
+
+  async update(pageId, game, catName) {
+    return this._req(`/pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties: this._props(game, catName) }),
+    });
+  }
+
+  async archive(pageId) {
+    return this._req(`/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ archived: true }) });
+  }
+
+  _props(game, catName) {
+    const p = {
+      'Nom':          { title:     [{ text: { content: game.name     || '' } }] },
+      'Propriétaire': { select:    { name: game.owner    || 'J'      } },
+      'Joueurs':      { rich_text: [{ text: { content: game.players  || '' } }] },
+      'Durée':        { rich_text: [{ text: { content: game.duration || '' } }] },
+    };
+    if (catName) p['Catégorie'] = { select: { name: catName } };
+    return p;
+  }
+}
+
+let notion = null;
+let connStatus = 'unconfigured';
+
+// ============================
 // STATE
 // ============================
 let state = {
@@ -938,10 +1138,10 @@ let state = {
 };
 
 const OWNERS = {
-  J:  { label: 'Joueur 1',         cls: 'owner-J',  icon: '👤' },
-  M:  { label: 'Joueur 2',          cls: 'owner-M',  icon: '👤' },
-  FR: { label: 'Familles Rurales',cls: 'owner-FR', icon: '🏠' },
-  JM: { label: 'Joueur 1 & Joueur 2',cls: 'owner-JM', icon: '👥' },
+  J:  { label: 'Joueur 1',            cls: 'owner-J',  icon: '👤' },
+  M:  { label: 'Joueur 2',            cls: 'owner-M',  icon: '👤' },
+  FR: { label: 'Familles Rurales',    cls: 'owner-FR', icon: '🏠' },
+  JM: { label: 'Joueur 1 & Joueur 2', cls: 'owner-JM', icon: '👥' },
 };
 
 const DEFAULT_CATEGORIES = [
@@ -966,12 +1166,15 @@ let activeOwnerFilter = 'all';
 // ============================
 // INIT
 // ============================
-function init() {
-  const saved = localStorage.getItem('ludotheque');
-  if (saved) {
-    try { state = JSON.parse(saved); } catch(e) {}
+async function init() {
+  migrateOldData();
+  loadSettings();
+  loadCategories();
+  if (settings.notionToken && settings.notionDbId) {
+    notion = new NotionAPI(settings.notionToken, settings.notionDbId);
+    await syncFromNotion();
   } else {
-    DEFAULT_CATEGORIES.forEach(c => addCategoryData(c));
+    loadGamesLocal();
   }
   populateCategorySelects();
   renderOwnerFilters();
@@ -979,10 +1182,201 @@ function init() {
   renderGamesTable();
   renderCatGrid();
   updateSidebarStats();
+  updateConnDot();
+}
+
+function migrateOldData() {
+  const old = localStorage.getItem('ludotheque');
+  if (!old) return;
+  if (localStorage.getItem('ludo_cats') || localStorage.getItem('ludo_games')) return;
+  try {
+    const d = JSON.parse(old);
+    if (d.categories?.length) localStorage.setItem('ludo_cats', JSON.stringify(d.categories));
+    if (d.games?.length)      localStorage.setItem('ludo_games', JSON.stringify(d.games));
+  } catch(e) {}
+}
+
+// ============================
+// CATEGORIES (always local)
+// ============================
+function loadCategories() {
+  const s = localStorage.getItem('ludo_cats');
+  if (s) { try { state.categories = JSON.parse(s); } catch(e) {} }
+  else { DEFAULT_CATEGORIES.forEach(c => addCategoryData(c)); saveCategories(); }
+  if (state.categories.length) state.nextCatId = Math.max(...state.categories.map(c => c.id)) + 1;
+}
+
+function saveCategories() {
+  localStorage.setItem('ludo_cats', JSON.stringify(state.categories));
+}
+
+// ============================
+// GAMES: NOTION SYNC
+// ============================
+async function syncFromNotion() {
+  showLoading(true);
+  try {
+    const pages = await notion.queryAll();
+    state.games = notionPagesToGames(pages);
+    state.nextGameId = state.games.length ? Math.max(...state.games.map(g => g.id)) + 1 : 1;
+    saveGamesLocal();
+    connStatus = 'ok';
+  } catch(e) {
+    connStatus = 'error';
+    toast('Erreur Notion : ' + e.message + ' — données locales utilisées', 'warn');
+    loadGamesLocal();
+  } finally {
+    showLoading(false);
+    updateConnDot();
+  }
+}
+
+function notionPagesToGames(pages) {
+  let id = 1;
+  return pages.map(page => {
+    const props = page.properties || {};
+    let name = '';
+    for (const val of Object.values(props)) {
+      if (val.type === 'title' && val.title?.length) { name = val.title.map(t => t.plain_text).join('').trim(); break; }
+    }
+    if (!name) return null;
+    const ownerRaw = props['Propriétaire']?.select?.name || '';
+    const owner    = ['J','M','FR','JM'].includes(ownerRaw) ? ownerRaw : 'J';
+    const catName  = props['Catégorie']?.select?.name || '';
+    const cat      = state.categories.find(c => c.name === catName);
+    const catId    = cat ? cat.id : detectCategory(name);
+    const players  = (props['Joueurs']?.rich_text || []).map(t => t.plain_text).join('');
+    const duration = (props['Durée']?.rich_text   || []).map(t => t.plain_text).join('');
+    return { id: id++, name, owner, catId, players, duration, notionId: page.id };
+  }).filter(Boolean);
+}
+
+async function syncNewGamesToNotion() {
+  if (!notion) return;
+  const unsynced = state.games.filter(g => !g.notionId);
+  if (!unsynced.length) return;
+  let count = 0;
+  for (const g of unsynced) {
+    try {
+      const catName = getCatById(g.catId)?.name || '';
+      const page    = await notion.create(g, catName);
+      g.notionId    = page.id;
+      count++;
+    } catch(e) { /* best effort */ }
+  }
+  saveGamesLocal();
+  if (count) toast(`${count} jeu(x) synchronisé(s) vers Notion`, 'success');
+}
+
+// ============================
+// GAMES: LOCAL STORAGE
+// ============================
+function loadGamesLocal() {
+  const s = localStorage.getItem('ludo_games');
+  if (s) { try { state.games = JSON.parse(s); } catch(e) {} }
+  if (state.games.length) state.nextGameId = Math.max(...state.games.map(g => g.id)) + 1;
+}
+
+function saveGamesLocal() {
+  localStorage.setItem('ludo_games', JSON.stringify(state.games));
 }
 
 function save() {
-  localStorage.setItem('ludotheque', JSON.stringify(state));
+  saveGamesLocal();
+  saveCategories();
+}
+
+// ============================
+// CONNECTION STATUS
+// ============================
+function updateConnDot() {
+  const dot = document.getElementById('conn-dot');
+  if (!dot) return;
+  dot.className = 'conn-dot ' + connStatus;
+  const t = { unconfigured: 'Notion non configuré', ok: 'Connecté à Notion', error: 'Erreur de connexion Notion' };
+  dot.title = t[connStatus] || '';
+}
+
+function showLoading(show) {
+  document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+}
+
+// ============================
+// SETTINGS PAGE
+// ============================
+function renderSettingsPage() {
+  document.getElementById('settings-token').value = settings.notionToken || '';
+  document.getElementById('settings-dbid').value  = settings.notionDbId  || '';
+  const st = document.getElementById('settings-status');
+  st.textContent = '';
+  st.className   = 'settings-status';
+}
+
+async function testNotionConnection() {
+  const token = document.getElementById('settings-token').value.trim();
+  const dbId  = document.getElementById('settings-dbid').value.trim();
+  if (!token || !dbId) { toast('Renseignez le token et l\'ID de base', 'warn'); return; }
+  const statusEl = document.getElementById('settings-status');
+  statusEl.textContent = 'Test en cours…';
+  statusEl.className   = 'settings-status testing';
+  try {
+    const api    = new NotionAPI(token, dbId);
+    const db     = await api.testConnection();
+    const dbName = (db.title || []).map(t => t.plain_text).join('') || db.id;
+    statusEl.textContent = '✓ Connexion réussie — base : ' + dbName;
+    statusEl.className   = 'settings-status ok';
+  } catch(e) {
+    statusEl.textContent = '✗ Erreur : ' + e.message;
+    statusEl.className   = 'settings-status error';
+  }
+}
+
+async function saveSettingsAndSync() {
+  const token = document.getElementById('settings-token').value.trim();
+  const dbId  = document.getElementById('settings-dbid').value.trim();
+  const wasConfigured = !!(settings.notionToken && settings.notionDbId);
+  settings.notionToken = token;
+  settings.notionDbId  = dbId;
+  persistSettings();
+
+  if (token && dbId) {
+    notion = new NotionAPI(token, dbId);
+    if (!wasConfigured && state.games.length) {
+      if (confirm(`Pousser ${state.games.length} jeu(x) local/locaux vers Notion avant synchronisation ?`)) {
+        showLoading(true);
+        for (const g of state.games) {
+          try {
+            const page = await notion.create(g, getCatById(g.catId)?.name || '');
+            g.notionId = page.id;
+          } catch(e) { /* best effort */ }
+        }
+        saveGamesLocal();
+        showLoading(false);
+      }
+    }
+    await syncFromNotion();
+    renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
+  } else {
+    notion = null;
+    connStatus = 'unconfigured';
+    updateConnDot();
+    toast('Paramètres sauvegardés (mode local)', 'info');
+  }
+}
+
+function clearNotionSettings() {
+  if (!confirm('Déconnecter Notion ? Les données locales seront conservées.')) return;
+  settings = { notionToken: '', notionDbId: '' };
+  persistSettings();
+  notion = null;
+  connStatus = 'unconfigured';
+  document.getElementById('settings-token').value = '';
+  document.getElementById('settings-dbid').value  = '';
+  const st = document.getElementById('settings-status');
+  st.textContent = '';
+  st.className   = 'settings-status';
+  updateConnDot();
+  toast('Notion déconnecté', 'info');
 }
 
 // ============================
@@ -1004,16 +1398,14 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  const navItems = document.querySelectorAll('.nav-item');
-  navItems.forEach(item => {
-    if (item.getAttribute('onclick') && item.getAttribute('onclick').includes(id)) {
-      item.classList.add('active');
-    }
+  document.querySelectorAll('.nav-item').forEach(item => {
+    if (item.getAttribute('onclick')?.includes(`'${id}'`)) item.classList.add('active');
   });
   closeSidebar();
-  if (id === 'dashboard') renderDashboard();
-  if (id === 'games') renderGamesTable();
+  if (id === 'dashboard')  renderDashboard();
+  if (id === 'games')      renderGamesTable();
   if (id === 'categories') renderCatGrid();
+  if (id === 'settings')   renderSettingsPage();
 }
 
 // ============================
@@ -1083,20 +1475,27 @@ function autoDetectCategory() {
   }
 }
 
-function saveGame() {
+async function saveGame() {
   const name = document.getElementById('game-name-input').value.trim();
   if (!name) { toast('Entrez un nom de jeu', 'warn'); return; }
   const owner = document.getElementById('game-owner-input').value;
   const catSel = document.getElementById('game-cat-input').value;
   const catId = catSel ? parseInt(catSel) : (detectCategory(name) || null);
-  state.games.push({
+  const game = {
     id: state.nextGameId++,
     name,
     owner,
     catId,
-    players: document.getElementById('game-players-input').value.trim(),
+    players:  document.getElementById('game-players-input').value.trim(),
     duration: document.getElementById('game-duration-input').value.trim(),
-  });
+  };
+  if (notion) {
+    try {
+      const page = await notion.create(game, getCatById(catId)?.name || '');
+      game.notionId = page.id;
+    } catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+  state.games.push(game);
   save();
   closeModal('modal-add-game');
   renderGamesTable();
@@ -1123,16 +1522,20 @@ function editGame(id) {
   document.getElementById('modal-edit-game').classList.add('open');
 }
 
-function updateGame() {
+async function updateGame() {
   const id = parseInt(document.getElementById('edit-game-id').value);
-  const g = state.games.find(x => x.id === id);
+  const g  = state.games.find(x => x.id === id);
   if (!g) return;
-  g.name = document.getElementById('edit-game-name').value.trim();
-  g.owner = document.getElementById('edit-game-owner').value;
+  g.name     = document.getElementById('edit-game-name').value.trim();
+  g.owner    = document.getElementById('edit-game-owner').value;
   const catVal = document.getElementById('edit-game-cat').value;
-  g.catId = catVal ? parseInt(catVal) : null;
-  g.players = document.getElementById('edit-game-players').value.trim();
+  g.catId    = catVal ? parseInt(catVal) : null;
+  g.players  = document.getElementById('edit-game-players').value.trim();
   g.duration = document.getElementById('edit-game-duration').value.trim();
+  if (notion && g.notionId) {
+    try { await notion.update(g.notionId, g, getCatById(g.catId)?.name || ''); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
   save();
   closeModal('modal-edit-game');
   renderGamesTable();
@@ -1141,10 +1544,14 @@ function updateGame() {
   toast('Jeu mis à jour', 'success');
 }
 
-function deleteGame(id) {
+async function deleteGame(id) {
   const g = state.games.find(x => x.id === id);
   if (!g) return;
   if (!confirm(`Supprimer "${g.name}" ?`)) return;
+  if (notion && g.notionId) {
+    try { await notion.archive(g.notionId); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
   state.games = state.games.filter(x => x.id !== id);
   save();
   renderGamesTable();
@@ -1209,10 +1616,10 @@ function saveCategory() {
   addCategoryData({
     name,
     emoji: document.getElementById('cat-emoji-input').value.trim() || '🎲',
-    desc: document.getElementById('cat-desc-input').value.trim(),
+    desc:  document.getElementById('cat-desc-input').value.trim(),
     keywords: [...currentKeywords],
   });
-  save();
+  saveCategories();
   populateCategorySelects();
   renderCatGrid();
   renderDashboard();
@@ -1233,7 +1640,7 @@ function deleteCategory(id) {
   renderGamesTable();
   renderDashboard();
   updateSidebarStats();
-  toast(`Catégorie supprimée`, 'info');
+  toast('Catégorie supprimée', 'info');
 }
 
 // ============================
@@ -1448,6 +1855,7 @@ async function importFromNotion() {
       added++;
     }
 
+    if (notion) await syncNewGamesToNotion();
     save();
     progBar.style.width = '100%';
     progText.textContent = `${added} jeux importés (${skipped} ignorés)`;
@@ -1496,9 +1904,9 @@ function parseCsvFile(file) {
   reader.readAsText(file, 'UTF-8');
 }
 
-function confirmCsvImport() {
-  const nameCol = document.getElementById('csv-name-col').value.trim();
-  const ownerCol = document.getElementById('csv-owner-col').value.trim();
+async function confirmCsvImport() {
+  const nameCol      = document.getElementById('csv-name-col').value.trim();
+  const ownerCol     = document.getElementById('csv-owner-col').value.trim();
   const defaultOwner = document.getElementById('csv-default-owner').value;
   let added = 0;
   csvParsedData.forEach(row => {
@@ -1508,13 +1916,14 @@ function confirmCsvImport() {
     let ownerKey = defaultOwner;
     if (ownerCol && row[ownerCol]) {
       const low = row[ownerCol].toLowerCase();
-      if (low.includes('joueur 2') || low === 'j2') ownerKey = 'M';
+      if      (low.includes('joueur 2') || low === 'j2') ownerKey = 'M';
       else if (low.includes('familles') || low.includes('fr')) ownerKey = 'FR';
       else if (low.includes('joueur 1') || low === 'j1') ownerKey = 'J';
     }
     state.games.push({ id: state.nextGameId++, name, owner: ownerKey, catId: detectCategory(name), players: '', duration: '' });
     added++;
   });
+  if (notion) await syncNewGamesToNotion();
   save();
   renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
   toast(`${added} jeux importés depuis le CSV`, 'success');
@@ -1524,8 +1933,8 @@ function confirmCsvImport() {
 // ============================
 // IMPORT: TEXT
 // ============================
-function importFromText() {
-  const text = document.getElementById('text-games').value.trim();
+async function importFromText() {
+  const text  = document.getElementById('text-games').value.trim();
   const owner = document.getElementById('text-owner').value;
   if (!text) { toast('Entrez des jeux', 'warn'); return; }
   const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
@@ -1535,6 +1944,7 @@ function importFromText() {
     state.games.push({ id: state.nextGameId++, name, owner, catId: detectCategory(name), players: '', duration: '' });
     added++;
   });
+  if (notion) await syncNewGamesToNotion();
   save();
   renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
   document.getElementById('text-games').value = '';
