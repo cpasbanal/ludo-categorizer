@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ludothèque · Familles Rurales</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Charte Familles Rurales */
+  --green:        #2E7D32;
+  --green-dark:   #1B5E20;
+  --green-mid:    #388E3C;
+  --green-light:  #E8F5E9;
+  --green-muted:  #C8E6C9;
+  --orange:       #F26522;
+  --orange-dark:  #D84315;
+  --orange-light: #FFF3E0;
+  --orange-muted: #FFCCBC;
+  --blue:         #1565C0;
+  --blue-light:   #E3F2FD;
+
+  /* Surfaces */
+  --bg:       #F4F6F4;
+  --surface:  #FFFFFF;
+  --surface2: #F0F4F0;
+  --surface3: #E5EDE5;
+  --border:   #D8E5D8;
+  --border2:  #B8CFB8;
+
+  /* Text */
+  --text:     #1A2E1A;
+  --text-med: #3D5A3D;
+  --muted:    #6B896B;
+
+  /* Owner colours */
+  --col-J:    #1565C0;
+  --col-M:    #F26522;
+  --col-FR:   #2E7D32;
+  --col-JM:   #7B1FA2;
+
+  --r:    10px;
+  --r-sm:  6px;
+  --r-xs:  4px;
+  --font-head: 'Nunito', sans-serif;
+  --font-body: 'Lato', sans-serif;
+
+  /* Mobile nav height */
+  --nav-h: 60px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.55;
+}
+
+/* ===== LAYOUT ===== */
+.shell { display: flex; min-height: 100vh; }
+
+/* Sidebar desktop */
+.sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--green-dark);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 50;
+  transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+}
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ===== LOGO ===== */
+.logo {
+  padding: 22px 18px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-icon {
+  width: 40px; height: 40px;
+  background: var(--orange);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; flex-shrink: 0;
+}
+.logo-text {}
+.logo-mark {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 1.05rem;
+  color: #fff;
+  line-height: 1.1;
+}
+.logo-sub {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.55);
+  margin-top: 2px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+/* ===== NAV ===== */
+.nav { padding: 10px 0; flex: 1; }
+.nav-section {
+  padding: 14px 18px 5px;
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 18px;
+  font-size: 0.875rem; font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+  font-family: var(--font-body);
+  user-select: none;
+}
+.nav-item:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.nav-item.active {
+  color: #fff;
+  border-left-color: var(--orange);
+  background: rgba(255,255,255,0.12);
+}
+.nav-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+
+/* Sidebar stats */
+.stats-mini {
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.stat-mini-card {
+  background: rgba(255,255,255,0.08);
+  border-radius: var(--r-sm);
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat-mini-n { font-family: var(--font-head); font-size: 1.4rem; font-weight: 800; color: var(--orange); }
+.stat-mini-l { font-size: 0.62rem; color: rgba(255,255,255,0.5); margin-top: 1px; }
+
+/* ===== MOBILE HAMBURGER ===== */
+.hamburger {
+  display: none;
+  background: none; border: none; cursor: pointer;
+  padding: 8px; color: var(--text); font-size: 1.3rem;
+}
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 49;
+}
+
+/* ===== TOPBAR ===== */
+.topbar {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 20;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.page-title {
+  font-family: var(--font-head);
+  font-size: 1.2rem; font-weight: 800;
+  color: var(--green-dark);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ===== PAGE CONTENT ===== */
+.page { display: none; padding: 24px; flex: 1; }
+.page.active { display: block; }
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 18px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-body);
+  font-size: 0.83rem; font-weight: 700;
+  cursor: pointer; border: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-primary { background: var(--orange); color: #fff; }
+.btn-primary:hover { background: var(--orange-dark); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(242,101,34,0.35); }
+.btn-green { background: var(--green); color: #fff; }
+.btn-green:hover { background: var(--green-dark); transform: translateY(-1px); }
+.btn-secondary { background: var(--surface2); color: var(--text-med); border: 1px solid var(--border2); }
+.btn-secondary:hover { background: var(--surface3); }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+.btn-danger { background: rgba(211,47,47,0.08); color: #C62828; border: 1px solid rgba(211,47,47,0.2); }
+.btn-danger:hover { background: rgba(211,47,47,0.15); }
+.btn-sm { padding: 5px 11px; font-size: 0.75rem; }
+.btn-icon { padding: 7px 9px; }
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.card-title {
+  font-family: var(--font-head);
+  font-size: 0.92rem; font-weight: 800;
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--green-dark);
+}
+.card-title .icon { font-size: 1rem; }
+
+/* ===== IMPORT TABS ===== */
+.import-tabs {
+  display: flex; gap: 4px;
+  background: var(--surface2);
+  border-radius: var(--r-sm);
+  padding: 4px;
+  margin-bottom: 20px;
+}
+.import-tab {
+  flex: 1; padding: 9px 12px; text-align: center;
+  border-radius: 6px; font-size: 0.82rem; font-weight: 700;
+  cursor: pointer; color: var(--muted);
+  transition: all 0.15s; border: none; background: transparent;
+  font-family: var(--font-body);
+}
+.import-tab.active { background: var(--surface); color: var(--green-dark); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ===== FORMS ===== */
+input, select, textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  padding: 10px 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  appearance: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46,125,50,0.12);
+}
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B896B' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 5px; font-weight: 700; letter-spacing: 0.03em; }
+.form-row { display: grid; gap: 12px; margin-bottom: 14px; }
+.form-row-2 { grid-template-columns: 1fr 1fr; }
+.form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+/* ===== DROP ZONE ===== */
+.drop-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--r);
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--muted);
+  background: var(--surface2);
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--green);
+  background: var(--green-light);
+  color: var(--green-dark);
+}
+.drop-zone-icon { font-size: 2.2rem; margin-bottom: 10px; }
+.drop-zone-text { font-size: 0.9rem; font-weight: 600; }
+.drop-zone-sub { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+/* ===== OWNER BADGES ===== */
+.owner-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 0.72rem; font-weight: 700;
+  white-space: nowrap; font-family: var(--font-head);
+}
+.owner-J  { background: #E3F2FD; color: var(--col-J);  border: 1px solid #BBDEFB; }
+.owner-M  { background: #FFF3E0; color: var(--col-M);  border: 1px solid #FFCCBC; }
+.owner-FR { background: var(--green-light); color: var(--col-FR); border: 1px solid var(--green-muted); }
+.owner-JM { background: #F3E5F5; color: var(--col-JM); border: 1px solid #E1BEE7; }
+
+/* ===== CAT CHIP ===== */
+.cat-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: var(--r-xs);
+  font-size: 0.71rem; font-weight: 600; white-space: nowrap;
+  background: var(--green-light); color: var(--green-dark);
+  border: 1px solid var(--green-muted);
+}
+.cat-chip.uncategorized { background: var(--surface2); color: var(--muted); border-color: var(--border); }
+
+/* ===== GAMES TABLE ===== */
+.games-table { width: 100%; border-collapse: collapse; }
+.games-table th {
+  text-align: left; font-size: 0.68rem; font-weight: 700;
+  color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 0 14px 10px; border-bottom: 2px solid var(--border);
+}
+.games-table td {
+  padding: 11px 14px; font-size: 0.86rem;
+  border-bottom: 1px solid var(--border); vertical-align: middle;
+}
+.games-table tr:last-child td { border-bottom: none; }
+.games-table tr:hover td { background: var(--green-light); }
+.game-name { font-weight: 700; color: var(--green-dark); }
+.game-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+.games-table tr:hover .game-actions { opacity: 1; }
+
+/* ===== CATEGORY GRID ===== */
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+.cat-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 18px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.cat-card:hover { border-color: var(--green-mid); box-shadow: 0 3px 10px rgba(46,125,50,0.1); }
+.cat-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.cat-card-title {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-head); font-size: 0.95rem; font-weight: 800; color: var(--green-dark);
+}
+.cat-emoji { font-size: 1.2rem; }
+.cat-games-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; }
+.cat-game-pill {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-xs); padding: 2px 8px;
+  font-size: 0.73rem; color: var(--text-med); font-weight: 500;
+}
+.cat-empty { font-size: 0.78rem; color: var(--muted); font-style: italic; padding: 3px 0; }
+.cat-count-badge {
+  background: var(--green-light); color: var(--green-dark);
+  border-radius: 20px; padding: 2px 9px;
+  font-size: 0.68rem; font-weight: 800;
+  font-family: var(--font-head);
+}
+.cat-card-new {
+  border: 2px dashed var(--border2); background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--muted); font-size: 0.85rem; font-weight: 600;
+  min-height: 100px; transition: all 0.15s;
+}
+.cat-card-new:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(3px);
+  z-index: 100; display: none;
+  align-items: center; justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px;
+  width: 100%; max-width: 500px;
+  animation: modal-in 0.2s ease;
+  max-height: 90vh; overflow-y: auto;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.modal-title {
+  font-family: var(--font-head); font-size: 1.15rem; font-weight: 800;
+  margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+  color: var(--green-dark);
+}
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* ===== KEYWORD TAGS ===== */
+.keyword-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.keyword-tag {
+  background: var(--green-light); border-radius: var(--r-xs); padding: 3px 8px;
+  font-size: 0.73rem; color: var(--green-dark); border: 1px solid var(--green-muted);
+  cursor: pointer; transition: all 0.1s; font-weight: 600;
+}
+.keyword-tag:hover { background: var(--orange-muted); color: var(--orange-dark); border-color: var(--orange-muted); }
+.keyword-tag::after { content: ' ×'; opacity: 0.6; }
+
+/* ===== TOASTS ===== */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 10px 16px;
+  font-size: 0.82rem; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+  animation: toast-in 0.2s ease; max-width: 290px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  font-weight: 600;
+}
+.toast.success { border-left: 4px solid var(--green); }
+.toast.info    { border-left: 4px solid var(--blue); }
+.toast.warn    { border-left: 4px solid var(--orange); }
+@keyframes toast-in { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:none; } }
+
+/* ===== SEARCH ===== */
+.search-bar { position: relative; margin-bottom: 16px; }
+.search-bar input { padding-left: 36px; }
+.search-bar-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); font-size: 0.9rem; pointer-events: none;
+}
+
+/* ===== FILTERS ===== */
+.filter-row { display: flex; gap: 7px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.filter-chip {
+  padding: 5px 13px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+  cursor: pointer; border: 1.5px solid var(--border2);
+  background: transparent; color: var(--muted);
+  font-family: var(--font-body); transition: all 0.15s;
+}
+.filter-chip.active { background: var(--green); color: #fff; border-color: var(--green); }
+.filter-chip:hover { color: var(--green-dark); border-color: var(--green-mid); }
+
+/* ===== PROGRESS BAR ===== */
+.progress-bar { height: 4px; background: var(--surface3); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
+
+/* ===== EMPTY STATE ===== */
+.empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+.empty-state-icon { font-size: 2.8rem; margin-bottom: 12px; }
+.empty-state-title { font-family: var(--font-head); font-size: 1rem; font-weight: 800; color: var(--text-med); margin-bottom: 6px; }
+.empty-state-sub { font-size: 0.85rem; }
+
+/* ===== NOTION INFO ===== */
+.notion-info {
+  background: var(--blue-light); border: 1px solid #BBDEFB;
+  border-radius: var(--r-sm); padding: 12px 14px;
+  font-size: 0.79rem; color: var(--blue); margin-bottom: 16px; line-height: 1.65;
+}
+.notion-info a { color: var(--blue); font-weight: 700; }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* ===== DASHBOARD STAT CARDS ===== */
+.dash-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 18px 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.dash-stat-n { font-family: var(--font-head); font-size: 2rem; font-weight: 900; }
+.dash-stat-l { font-size: 0.75rem; color: var(--muted); margin-top: 2px; font-weight: 600; }
+.dash-stat-icon { font-size: 1.6rem; margin-bottom: 8px; }
+
+/* ===== RESPONSIVE ===== */
+
+/* Tablet */
+@media (max-width: 900px) {
+  .sidebar { width: 200px; }
+  .page { padding: 18px; }
+  .topbar { padding: 12px 18px; }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  /* Sidebar becomes drawer */
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+    z-index: 200;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .hamburger { display: flex; }
+  .main { width: 100%; }
+
+  /* Topbar */
+  .topbar { padding: 11px 14px; }
+  .page-title { font-size: 1rem; }
+  .topbar-actions .btn-secondary { display: none; } /* hide secondary on mobile */
+
+  /* Pages */
+  .page { padding: 14px; }
+
+  /* Tables → card list on mobile */
+  .games-table thead { display: none; }
+  .games-table, .games-table tbody, .games-table tr, .games-table td { display: block; width: 100%; }
+  .games-table tr {
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    margin-bottom: 10px; padding: 12px 14px; background: var(--surface);
+    position: relative;
+  }
+  .games-table tr:hover td { background: transparent; }
+  .games-table tr:hover { background: var(--green-light); }
+  .games-table td { padding: 3px 0; border: none; font-size: 0.85rem; }
+  .game-actions { opacity: 1; margin-top: 8px; }
+
+  /* Grid → 1 col */
+  .cat-grid { grid-template-columns: 1fr; }
+  .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+
+  /* Dashboard stats → 2 col */
+  #dashboard-stats { grid-template-columns: 1fr 1fr !important; }
+  #dashboard-stats .dash-stat { padding: 14px; }
+  .dash-stat-n { font-size: 1.6rem; }
+
+  /* Dashboard two-col → 1 col */
+  #dashboard-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- SIDEBAR OVERLAY (mobile) -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">
+      <div class="logo-icon">🎲</div>
+      <div class="logo-text">
+        <div class="logo-mark">Ludothèque</div>
+        <div class="logo-sub">Familles Rurales</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Navigation</div>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <span class="nav-icon">◈</span> Tableau de bord
+      </div>
+      <div class="nav-item" onclick="showPage('games')">
+        <span class="nav-icon">⊞</span> Tous les jeux
+      </div>
+      <div class="nav-item" onclick="showPage('categories')">
+        <span class="nav-icon">⊟</span> Catégories
+      </div>
+      <div class="nav-section">Ajouter</div>
+      <div class="nav-item" onclick="showPage('import')">
+        <span class="nav-icon">↑</span> Importer
+      </div>
+      <div class="nav-item" onclick="openAddGame()">
+        <span class="nav-icon">+</span> Ajouter un jeu
+      </div>
+    </nav>
+    <div class="stats-mini" id="sidebar-stats">
+      <div class="stat-mini-card">
+        <div class="stat-mini-n" id="stat-total">0</div>
+        <div class="stat-mini-l">jeux</div>
+      </div>
+      <div class="stat-mini-card">
+        <div class="stat-mini-n" id="stat-cats">0</div>
+        <div class="stat-mini-l">catégories</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <div class="page-title">Tableau de bord</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-primary" onclick="openAddGame()">+ Ajouter</button>
+        </div>
+      </div>
+      <div style="padding: 24px;">
+        <div style="display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px;" id="dashboard-stats"></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;" id="dashboard-grid">
+          <div class="card">
+            <div class="card-title"><span class="icon">⊟</span> Catégories</div>
+            <div id="dash-cats"></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="icon">👤</span> Par propriétaire</div>
+            <div id="dash-owners"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAMES LIST -->
+    <div id="page-games" class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <div class="page-title">Tous les jeux</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary" onclick="recategorizeAll()">↻ Recatégoriser</button>
+          <button class="btn btn-primary" onclick="openAddGame()">+ Ajouter</button>
+        </div>
+      </div>
+      <div style="padding: 24px;">
+        <div class="search-bar">
+          <span class="search-bar-icon">🔍</span>
+          <input type="text" id="search-input" placeholder="Rechercher un jeu…" oninput="renderGamesTable()">
+        </div>
+        <div class="filter-row" id="owner-filters">
+          <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Filtrer :</span>
+        </div>
+        <div class="card" style="padding: 0; overflow: hidden;">
+          <table class="games-table" id="games-table">
+            <thead>
+              <tr>
+                <th>Nom du jeu</th>
+                <th>Propriétaire</th>
+                <th>Catégorie</th>
+                <th>Joueurs</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="games-tbody"></tbody>
+          </table>
+          <div id="games-empty" class="empty-state" style="display:none;">
+            <div class="empty-state-icon">🎲</div>
+            <div class="empty-state-title">Aucun jeu trouvé</div>
+            <div class="empty-state-sub">Ajoutez des jeux ou modifiez votre recherche</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORIES -->
+    <div id="page-categories" class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <div class="page-title">Catégories</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary" onclick="recategorizeAll()">↻ Recatégoriser</button>
+          <button class="btn btn-primary" onclick="openAddCategory()">+ Nouvelle</button>
+        </div>
+      </div>
+      <div style="padding: 24px;">
+        <div class="cat-grid" id="cat-grid"></div>
+      </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div id="page-import" class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <div class="page-title">Importer des jeux</div>
+        </div>
+      </div>
+      <div style="padding: 24px;">
+
+        <div class="import-tabs">
+          <button class="import-tab active" onclick="switchImportTab('notion', this)">🔗 Notion</button>
+          <button class="import-tab" onclick="switchImportTab('csv', this)">📄 CSV</button>
+          <button class="import-tab" onclick="switchImportTab('text', this)">✏️ Texte</button>
+        </div>
+
+        <!-- NOTION TAB -->
+        <div id="import-notion" class="tab-content active">
+          <div class="notion-info">
+            <strong>Comment connecter Notion :</strong><br>
+            1. Créez une intégration sur <a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a><br>
+            2. Copiez le token de l'intégration ici<br>
+            3. Partagez votre base de données avec l'intégration<br>
+            4. Copiez l'ID de la base (32 caractères dans l'URL)
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Token d'intégration Notion</label>
+              <input type="password" id="notion-token" placeholder="secret_xxxxxxxxxxxx">
+            </div>
+          </div>
+          <div class="form-row form-row-2">
+            <div>
+              <label>ID de la base de données</label>
+              <input type="text" id="notion-db-id" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+            </div>
+            <div>
+              <label>Propriété "Nom" dans Notion</label>
+              <input type="text" id="notion-name-prop" placeholder="Nom" value="Nom">
+            </div>
+          </div>
+          <div class="form-row form-row-2">
+            <div>
+              <label>Propriété "Propriétaire" dans Notion</label>
+              <input type="text" id="notion-owner-prop" placeholder="Possédé par / Propriétaire…">
+            </div>
+            <div>
+              <label>Propriétaire par défaut (si absent)</label>
+              <select id="notion-default-owner">
+                <option value="J">Joueur 1</option>
+                <option value="M">Joueur 2</option>
+                <option value="FR">Familles Rurales</option>
+                <option value="JM">Joueur 1 & Joueur 2</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Filtrer uniquement les propriétaires</label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-J" checked> <span style="color:var(--accent3);">Joueur 1</span></label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-M" checked> <span style="color:var(--accent2);">Joueur 2</span></label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-FR" checked> <span style="color:var(--accent4);">Familles Rurales</span></label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-JM" checked> <span style="color:var(--accent);">Joueur 1 & Joueur 2</span></label>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="importFromNotion()" id="btn-notion-import">
+            🔗 Récupérer depuis Notion
+          </button>
+          <div id="notion-progress" style="display:none; margin-top:12px;">
+            <div style="font-size:0.8rem;color:var(--muted);" id="notion-progress-text">Connexion…</div>
+            <div class="progress-bar"><div class="progress-fill" id="notion-progress-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <!-- CSV TAB -->
+        <div id="import-csv" class="tab-content">
+          <div class="drop-zone" id="csv-drop" onclick="document.getElementById('csv-file').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleCsvDrop(event)">
+            <div class="drop-zone-icon">📄</div>
+            <div class="drop-zone-text">Glisser-déposer un fichier CSV</div>
+            <div class="drop-zone-sub">ou cliquer pour parcourir</div>
+          </div>
+          <input type="file" id="csv-file" accept=".csv,.txt" style="display:none" onchange="handleCsvFile(event)">
+          <div class="form-row form-row-2" style="margin-top:16px;">
+            <div>
+              <label>Colonne "Nom du jeu"</label>
+              <input type="text" id="csv-name-col" placeholder="Nom / name / titre" value="Nom">
+            </div>
+            <div>
+              <label>Colonne "Propriétaire" (optionnel)</label>
+              <input type="text" id="csv-owner-col" placeholder="Propriétaire / owner">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Propriétaire par défaut</label>
+              <select id="csv-default-owner">
+                <option value="J">Joueur 1</option>
+                <option value="M">Joueur 2</option>
+                <option value="FR">Familles Rurales</option>
+                <option value="JM">Joueur 1 & Joueur 2</option>
+              </select>
+            </div>
+          </div>
+          <div id="csv-preview" style="display:none;">
+            <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;" id="csv-preview-count"></div>
+            <button class="btn btn-primary" onclick="confirmCsvImport()">✓ Confirmer l'import</button>
+          </div>
+        </div>
+
+        <!-- TEXT TAB -->
+        <div id="import-text" class="tab-content">
+          <div class="form-row">
+            <div>
+              <label>Propriétaire pour cette liste</label>
+              <select id="text-owner">
+                <option value="J">Joueur 1</option>
+                <option value="M">Joueur 2</option>
+                <option value="FR">Familles Rurales</option>
+                <option value="JM">Joueur 1 & Joueur 2</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Liste de jeux (un par ligne)</label>
+              <textarea id="text-games" rows="12" placeholder="7 Wonders&#10;Catan&#10;Ticket to Ride&#10;Pandemic&#10;Carcassonne&#10;Dixit&#10;Skull&#10;Dobble&#10;Time's Up&#10;Codenames…"></textarea>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="importFromText()">↑ Importer la liste</button>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL: ADD GAME -->
+<div class="modal-overlay" id="modal-add-game">
+  <div class="modal">
+    <div class="modal-title">🎲 Ajouter un jeu</div>
+    <div class="form-row">
+      <div>
+        <label>Nom du jeu *</label>
+        <input type="text" id="game-name-input" placeholder="Ex: Catan, Dixit, Skull…" oninput="autoDetectCategory()">
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div>
+        <label>Propriétaire *</label>
+        <select id="game-owner-input">
+          <option value="J">Joueur 1</option>
+          <option value="M">Joueur 2</option>
+          <option value="FR">Familles Rurales</option>
+          <option value="JM">Joueur 1 & Joueur 2</option>
+        </select>
+      </div>
+      <div>
+        <label>Catégorie</label>
+        <select id="game-cat-input">
+          <option value="">— Auto-détection —</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div>
+        <label>Nb joueurs (ex: 2-6)</label>
+        <input type="text" id="game-players-input" placeholder="2-5">
+      </div>
+      <div>
+        <label>Durée (ex: 45 min)</label>
+        <input type="text" id="game-duration-input" placeholder="30-60 min">
+      </div>
+    </div>
+    <div id="auto-cat-preview" style="display:none; margin-top:-6px; margin-bottom:8px;">
+      <span style="font-size:0.75rem; color:var(--muted);">Catégorie détectée : </span>
+      <span style="font-size:0.75rem;" id="auto-cat-name"></span>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-game')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveGame()">Ajouter le jeu</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ADD CATEGORY -->
+<div class="modal-overlay" id="modal-add-category">
+  <div class="modal">
+    <div class="modal-title">⊟ Créer une catégorie</div>
+    <div class="form-row form-row-2">
+      <div>
+        <label>Nom de la catégorie *</label>
+        <input type="text" id="cat-name-input" placeholder="Ex: Jeux coopératifs">
+      </div>
+      <div>
+        <label>Emoji</label>
+        <input type="text" id="cat-emoji-input" placeholder="🎲" maxlength="2">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Description courte</label>
+        <input type="text" id="cat-desc-input" placeholder="Brève description de la catégorie…">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Mots-clés d'auto-catégorisation (appuyer sur Entrée pour ajouter)</label>
+        <input type="text" id="cat-keyword-input" placeholder="coop, cooperatif, hanabi…" onkeydown="addKeyword(event)">
+        <div class="keyword-list" id="keyword-list"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-category')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveCategory()">Créer la catégorie</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT GAME -->
+<div class="modal-overlay" id="modal-edit-game">
+  <div class="modal">
+    <div class="modal-title">✏️ Modifier le jeu</div>
+    <input type="hidden" id="edit-game-id">
+    <div class="form-row">
+      <div>
+        <label>Nom du jeu</label>
+        <input type="text" id="edit-game-name">
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div>
+        <label>Propriétaire</label>
+        <select id="edit-game-owner"></select>
+      </div>
+      <div>
+        <label>Catégorie</label>
+        <select id="edit-game-cat"></select>
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div><label>Nb joueurs</label><input type="text" id="edit-game-players"></div>
+      <div><label>Durée</label><input type="text" id="edit-game-duration"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit-game')">Annuler</button>
+      <button class="btn btn-primary" onclick="updateGame()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ============================
+// STATE
+// ============================
+let state = {
+  games: [],
+  categories: [],
+  nextGameId: 1,
+  nextCatId: 1,
+};
+
+const OWNERS = {
+  J:  { label: 'Joueur 1',         cls: 'owner-J',  icon: '👤' },
+  M:  { label: 'Joueur 2',          cls: 'owner-M',  icon: '👤' },
+  FR: { label: 'Familles Rurales',cls: 'owner-FR', icon: '🏠' },
+  JM: { label: 'Joueur 1 & Joueur 2',cls: 'owner-JM', icon: '👥' },
+};
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Puzzle & Logique',    emoji: '🧩', desc: 'Casse-têtes, déduction, réflexion', keywords: ['puzzle','logic','casse','iq','rush hour','kanoodle','ubongo','katamino','tangram','quoridor','patchwork','blokus','azul','sagrada','cascadia','project l','mondrian','chromino','ingenious','tetris','perplexus','labyrinth','labyrinthe'] },
+  { name: 'Enquête & Déduction', emoji: '🔍', desc: 'Mystère, indices, investigation',    keywords: ['cluedo','sherlock','detective','enquête','deduction','mystere','mystery','mansion','watson','alibi','crime','meurtre','suspect','scotland','culprit','saboteur','spyfall','blood','werewolf'] },
+  { name: 'Jeu de Plateau',      emoji: '♟️', desc: 'Stratégie, pions, exploration',      keywords: ['catan','catane','ticket','7 wonders','terraforming','agricola','dominion','wingspan','brass','viticulture','sheriff','santorini','concordia','hive','stone age','puerto rico','powergrid','trajan','paladins','castles','arnak','everdell','mage knight'] },
+  { name: 'Jeux Familiaux',      emoji: '👨‍👩‍👧‍👦', desc: 'Tous âges, accessible',            keywords: ['uno','jungle','junior','famille','king of tokyo','dobble','sushi go','sequence','memory','monopoly','lobo77','taco','cochon','pickomino','perudo','mille bornes','1000 bornes'] },
+  { name: "Jeux d'Ambiance",     emoji: '🎉', desc: 'Fous rires, festif',                  keywords: ['party','ambiance','times up','taboo','codenames','dixit','mysterium','skull','bluff','resistance','avalon','bang','loup garou','loups garous','blanc manger','trivial','jungle speed','citadels','coup'] },
+  { name: 'Jeu Coopératif',      emoji: '🤝', desc: 'Jouer ensemble, un seul camp',        keywords: ['pandemic','cooperative','cooperatif','coop','ghost stories','hanabi','spirit island','arkham','flash point','castle panic','mice','forbidden','interdit','magic maze','crew','just one'] },
+  { name: 'Jeu Express',         emoji: '⚡', desc: '~15 minutes chrono',                  keywords: ['skull','love letter','no thanks','6 qui prend','6 nimmt','liar','mind','the mind','bang the dice','coloretto','qwixx','incan','cafard','nidavellir','scout','regicide','spot it','slamwich'] },
+  { name: 'Rôle Caché',          emoji: '🎭', desc: 'Bluff, trahison, identités secrètes', keywords: ['resistance','avalon','secret','werewolf','loup garou','mafia','coup','sheriff nottingham','traître','traitor','one night','vampire','hidden role'] },
+  { name: 'Jeu Classique',       emoji: '🏆', desc: 'Intemporels, valeurs sûres',           keywords: ['echecs','échecs','dames','backgammon','go','puissance 4','scrabble','risk','stratego','mastermind','tarot','belote','rummy','rami','poker','mahjong','domino','cribbage'] },
+  { name: 'Créatif & Dessin',    emoji: '🎨', desc: 'Illustration, imagination',            keywords: ['dixit','pictionary','telestrations','blank','draw','illustrat','stories','dessin'] },
+  { name: 'Quiz & Culture',      emoji: '💡', desc: 'Savoir, culture générale',             keywords: ['trivial','quiz','culture','timeline','question','connaissance','knowledge'] },
+  { name: 'Dextérité & Adresse', emoji: '🖐️', desc: 'Physique, précision, rapidité',       keywords: ['jenga','klask','subbuteo','pitch','crocodile','brio','cup','stacking','ring','speed','jungle speed','rapide','dextérit'] },
+];
+
+let csvParsedData = [];
+let currentKeywords = [];
+let activeOwnerFilter = 'all';
+
+// ============================
+// INIT
+// ============================
+function init() {
+  const saved = localStorage.getItem('ludotheque');
+  if (saved) {
+    try { state = JSON.parse(saved); } catch(e) {}
+  } else {
+    DEFAULT_CATEGORIES.forEach(c => addCategoryData(c));
+  }
+  populateCategorySelects();
+  renderOwnerFilters();
+  renderDashboard();
+  renderGamesTable();
+  renderCatGrid();
+  updateSidebarStats();
+}
+
+function save() {
+  localStorage.setItem('ludotheque', JSON.stringify(state));
+}
+
+// ============================
+// MOBILE SIDEBAR
+// ============================
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+// ============================
+// NAVIGATION
+// ============================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    if (item.getAttribute('onclick') && item.getAttribute('onclick').includes(id)) {
+      item.classList.add('active');
+    }
+  });
+  closeSidebar();
+  if (id === 'dashboard') renderDashboard();
+  if (id === 'games') renderGamesTable();
+  if (id === 'categories') renderCatGrid();
+}
+
+// ============================
+// CATEGORY LOGIC
+// ============================
+function addCategoryData(c) {
+  state.categories.push({
+    id: state.nextCatId++,
+    name: c.name,
+    emoji: c.emoji || '🎲',
+    desc: c.desc || '',
+    keywords: c.keywords || [],
+    color: c.color || null,
+  });
+}
+
+function detectCategory(gameName) {
+  const lower = gameName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  for (const cat of state.categories) {
+    if (cat.keywords.some(k => lower.includes(k.normalize('NFD').replace(/[\u0300-\u036f]/g,'')))) {
+      return cat.id;
+    }
+  }
+  return null;
+}
+
+function getCatById(id) { return state.categories.find(c => c.id === id); }
+function getOwner(key) { return OWNERS[key] || { label: key, cls: 'owner-J', icon: '👤' }; }
+
+function ownerBadgeHtml(ownerKey) {
+  const o = getOwner(ownerKey);
+  return `<span class="owner-badge ${o.cls}">${o.icon} ${o.label}</span>`;
+}
+
+function catChipHtml(catId) {
+  const cat = getCatById(catId);
+  if (!cat) return '<span class="cat-chip uncategorized">Non catégorisé</span>';
+  return `<span class="cat-chip">${cat.emoji} ${cat.name}</span>`;
+}
+
+// ============================
+// ADD GAME
+// ============================
+function openAddGame() {
+  document.getElementById('game-name-input').value = '';
+  document.getElementById('game-players-input').value = '';
+  document.getElementById('game-duration-input').value = '';
+  document.getElementById('auto-cat-preview').style.display = 'none';
+  document.getElementById('modal-add-game').classList.add('open');
+  document.getElementById('game-name-input').focus();
+}
+
+function autoDetectCategory() {
+  const name = document.getElementById('game-name-input').value;
+  if (!name.trim()) { document.getElementById('auto-cat-preview').style.display = 'none'; return; }
+  const catId = detectCategory(name);
+  const sel = document.getElementById('game-cat-input');
+  if (catId) {
+    const cat = getCatById(catId);
+    document.getElementById('auto-cat-name').textContent = cat.emoji + ' ' + cat.name;
+    document.getElementById('auto-cat-preview').style.display = 'block';
+    sel.value = catId;
+  } else {
+    document.getElementById('auto-cat-name').textContent = 'Aucune';
+    document.getElementById('auto-cat-preview').style.display = 'block';
+    sel.value = '';
+  }
+}
+
+function saveGame() {
+  const name = document.getElementById('game-name-input').value.trim();
+  if (!name) { toast('Entrez un nom de jeu', 'warn'); return; }
+  const owner = document.getElementById('game-owner-input').value;
+  const catSel = document.getElementById('game-cat-input').value;
+  const catId = catSel ? parseInt(catSel) : (detectCategory(name) || null);
+  state.games.push({
+    id: state.nextGameId++,
+    name,
+    owner,
+    catId,
+    players: document.getElementById('game-players-input').value.trim(),
+    duration: document.getElementById('game-duration-input').value.trim(),
+  });
+  save();
+  closeModal('modal-add-game');
+  renderGamesTable();
+  renderCatGrid();
+  renderDashboard();
+  updateSidebarStats();
+  toast(`"${name}" ajouté 🎲`, 'success');
+}
+
+// ============================
+// EDIT/DELETE GAME
+// ============================
+function editGame(id) {
+  const g = state.games.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById('edit-game-id').value = id;
+  document.getElementById('edit-game-name').value = g.name;
+  populateSelect('edit-game-owner', Object.entries(OWNERS).map(([v,o]) => ({ value: v, label: o.label })), g.owner);
+  populateSelect('edit-game-cat',
+    [{ value: '', label: '— Non catégorisé —' }, ...state.categories.map(c => ({ value: c.id, label: c.emoji + ' ' + c.name }))],
+    g.catId || '');
+  document.getElementById('edit-game-players').value = g.players || '';
+  document.getElementById('edit-game-duration').value = g.duration || '';
+  document.getElementById('modal-edit-game').classList.add('open');
+}
+
+function updateGame() {
+  const id = parseInt(document.getElementById('edit-game-id').value);
+  const g = state.games.find(x => x.id === id);
+  if (!g) return;
+  g.name = document.getElementById('edit-game-name').value.trim();
+  g.owner = document.getElementById('edit-game-owner').value;
+  const catVal = document.getElementById('edit-game-cat').value;
+  g.catId = catVal ? parseInt(catVal) : null;
+  g.players = document.getElementById('edit-game-players').value.trim();
+  g.duration = document.getElementById('edit-game-duration').value.trim();
+  save();
+  closeModal('modal-edit-game');
+  renderGamesTable();
+  renderCatGrid();
+  renderDashboard();
+  toast('Jeu mis à jour', 'success');
+}
+
+function deleteGame(id) {
+  const g = state.games.find(x => x.id === id);
+  if (!g) return;
+  if (!confirm(`Supprimer "${g.name}" ?`)) return;
+  state.games = state.games.filter(x => x.id !== id);
+  save();
+  renderGamesTable();
+  renderCatGrid();
+  renderDashboard();
+  updateSidebarStats();
+  toast(`"${g.name}" supprimé`, 'info');
+}
+
+function recategorizeAll() {
+  let count = 0;
+  state.games.forEach(g => {
+    const newCat = detectCategory(g.name);
+    if (newCat && newCat !== g.catId) { g.catId = newCat; count++; }
+  });
+  save();
+  renderGamesTable();
+  renderCatGrid();
+  renderDashboard();
+  toast(`${count} jeu(x) recatégorisé(s)`, 'success');
+}
+
+// ============================
+// ADD CATEGORY
+// ============================
+function openAddCategory() {
+  document.getElementById('cat-name-input').value = '';
+  document.getElementById('cat-emoji-input').value = '';
+  document.getElementById('cat-desc-input').value = '';
+  document.getElementById('cat-keyword-input').value = '';
+  currentKeywords = [];
+  renderKeywordList();
+  document.getElementById('modal-add-category').classList.add('open');
+}
+
+function addKeyword(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const val = e.target.value.trim().toLowerCase();
+  if (val && !currentKeywords.includes(val)) {
+    currentKeywords.push(val);
+    renderKeywordList();
+  }
+  e.target.value = '';
+}
+
+function removeKeyword(k) {
+  currentKeywords = currentKeywords.filter(x => x !== k);
+  renderKeywordList();
+}
+
+function renderKeywordList() {
+  const list = document.getElementById('keyword-list');
+  list.innerHTML = currentKeywords.map(k =>
+    `<span class="keyword-tag" onclick="removeKeyword('${k}')">${k}</span>`
+  ).join('');
+}
+
+function saveCategory() {
+  const name = document.getElementById('cat-name-input').value.trim();
+  if (!name) { toast('Entrez un nom', 'warn'); return; }
+  addCategoryData({
+    name,
+    emoji: document.getElementById('cat-emoji-input').value.trim() || '🎲',
+    desc: document.getElementById('cat-desc-input').value.trim(),
+    keywords: [...currentKeywords],
+  });
+  save();
+  populateCategorySelects();
+  renderCatGrid();
+  renderDashboard();
+  updateSidebarStats();
+  closeModal('modal-add-category');
+  toast(`Catégorie "${name}" créée`, 'success');
+}
+
+function deleteCategory(id) {
+  const cat = getCatById(id);
+  if (!cat) return;
+  if (!confirm(`Supprimer la catégorie "${cat.name}" ?`)) return;
+  state.categories = state.categories.filter(c => c.id !== id);
+  state.games.forEach(g => { if (g.catId === id) g.catId = null; });
+  save();
+  populateCategorySelects();
+  renderCatGrid();
+  renderGamesTable();
+  renderDashboard();
+  updateSidebarStats();
+  toast(`Catégorie supprimée`, 'info');
+}
+
+// ============================
+// RENDER
+// ============================
+function renderGamesTable() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  let games = state.games;
+  if (q) games = games.filter(g => g.name.toLowerCase().includes(q));
+  if (activeOwnerFilter !== 'all') games = games.filter(g => g.owner === activeOwnerFilter);
+
+  const tbody = document.getElementById('games-tbody');
+  const empty = document.getElementById('games-empty');
+  if (!games.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = games.map(g => `
+    <tr>
+      <td class="game-name">${escHtml(g.name)}</td>
+      <td>${ownerBadgeHtml(g.owner)}</td>
+      <td>${catChipHtml(g.catId)}</td>
+      <td style="color:var(--muted);font-size:0.8rem;">${escHtml(g.players || '—')}</td>
+      <td>
+        <div class="game-actions">
+          <button class="btn btn-ghost btn-sm" onclick="editGame(${g.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id})">✕</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderCatGrid() {
+  const grid = document.getElementById('cat-grid');
+  const catCards = state.categories.map(cat => {
+    const games = state.games.filter(g => g.catId === cat.id);
+    return `
+      <div class="cat-card">
+        <div class="cat-card-header">
+          <div class="cat-card-title">
+            <span class="cat-emoji">${cat.emoji}</span>
+            ${escHtml(cat.name)}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="cat-count-badge">${games.length}</span>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="deleteCategory(${cat.id})" title="Supprimer">✕</button>
+          </div>
+        </div>
+        ${cat.desc ? `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;">${escHtml(cat.desc)}</div>` : ''}
+        <div class="cat-games-list">
+          ${games.length === 0
+            ? '<span class="cat-empty">Aucun jeu</span>'
+            : games.map(g => `<span class="cat-game-pill">${escHtml(g.name)}</span>`).join('')
+          }
+        </div>
+        ${cat.keywords.length ? `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;"><div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px;">Mots-clés</div><div class="keyword-list">${cat.keywords.slice(0,5).map(k=>`<span class="keyword-tag" style="cursor:default;" onclick="">${k}</span>`).join('')}${cat.keywords.length>5?`<span style="font-size:0.7rem;color:var(--muted);">+${cat.keywords.length-5}</span>`:''}</div></div>` : ''}
+      </div>
+    `;
+  }).join('');
+  grid.innerHTML = catCards + `
+    <div class="cat-card cat-card-new" onclick="openAddCategory()">
+      <span style="font-size:1.2rem;">+</span>
+      Nouvelle catégorie
+    </div>
+  `;
+}
+
+function renderDashboard() {
+  const total = state.games.length;
+  const catCount = state.categories.length;
+  const ownerCounts = {};
+  Object.keys(OWNERS).forEach(k => ownerCounts[k] = 0);
+  state.games.forEach(g => { if (ownerCounts[g.owner] !== undefined) ownerCounts[g.owner]++; });
+  const uncategorized = state.games.filter(g => !g.catId).length;
+
+  document.getElementById('dashboard-stats').innerHTML = `
+    <div class="dash-stat">
+      <div class="dash-stat-icon">🎲</div>
+      <div class="dash-stat-n" style="color:var(--green-dark);">${total}</div>
+      <div class="dash-stat-l">Total jeux</div>
+    </div>
+    <div class="dash-stat">
+      <div class="dash-stat-icon">⊟</div>
+      <div class="dash-stat-n" style="color:var(--green);">${catCount}</div>
+      <div class="dash-stat-l">Catégories</div>
+    </div>
+    <div class="dash-stat">
+      <div class="dash-stat-icon">⚠️</div>
+      <div class="dash-stat-n" style="color:${uncategorized>0?'var(--orange)':'var(--green)'};">${uncategorized}</div>
+      <div class="dash-stat-l">Non catégorisés</div>
+    </div>
+    <div class="dash-stat">
+      <div class="dash-stat-icon">👥</div>
+      <div class="dash-stat-n" style="color:var(--blue);">${Object.values(ownerCounts).filter(v=>v>0).length}</div>
+      <div class="dash-stat-l">Propriétaires</div>
+    </div>
+  `;
+
+  const catData = state.categories.map(c => ({ name: c.emoji + ' ' + c.name, count: state.games.filter(g => g.catId === c.id).length }))
+    .sort((a,b) => b.count - a.count).slice(0,8);
+  document.getElementById('dash-cats').innerHTML = catData.length === 0
+    ? '<div class="empty-state" style="padding:24px"><div class="empty-state-sub">Aucune catégorie</div></div>'
+    : catData.map(c => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+        <div style="font-size:0.83rem;flex:1;color:var(--text-med);font-weight:600;">${c.name}</div>
+        <div style="font-size:0.75rem;color:var(--muted);min-width:20px;text-align:right;font-weight:700;">${c.count}</div>
+        <div style="width:70px;"><div class="progress-bar" style="margin:0;"><div class="progress-fill" style="width:${total?Math.round(c.count/total*100):0}%"></div></div></div>
+      </div>
+    `).join('');
+
+  document.getElementById('dash-owners').innerHTML = Object.entries(OWNERS).map(([k, o]) => {
+    const count = ownerCounts[k] || 0;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        ${ownerBadgeHtml(k)}
+        <div style="flex:1;"><div class="progress-bar" style="margin:0;"><div class="progress-fill" style="width:${total?Math.round(count/total*100):0}%"></div></div></div>
+        <div style="font-size:0.75rem;color:var(--muted);min-width:20px;font-weight:700;">${count}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderOwnerFilters() {
+  const row = document.getElementById('owner-filters');
+  row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Filtrer :</span>
+    <button class="filter-chip active" onclick="setOwnerFilter('all', this)">Tous</button>
+    ${Object.entries(OWNERS).map(([k,o]) => `<button class="filter-chip" onclick="setOwnerFilter('${k}', this)">${o.label}</button>`).join('')}
+  `;
+}
+
+function setOwnerFilter(val, el) {
+  activeOwnerFilter = val;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderGamesTable();
+}
+
+function updateSidebarStats() {
+  document.getElementById('stat-total').textContent = state.games.length;
+  document.getElementById('stat-cats').textContent = state.categories.length;
+}
+
+// ============================
+// IMPORT: NOTION
+// ============================
+async function importFromNotion() {
+  const token = document.getElementById('notion-token').value.trim();
+  const dbId = document.getElementById('notion-db-id').value.trim().replace(/-/g,'');
+  const nameProp = document.getElementById('notion-name-prop').value.trim() || 'Nom';
+  const ownerProp = document.getElementById('notion-owner-prop').value.trim();
+  const defaultOwner = document.getElementById('notion-default-owner').value;
+
+  if (!token) { toast('Entrez votre token Notion', 'warn'); return; }
+  if (!dbId) { toast('Entrez l\'ID de la base', 'warn'); return; }
+
+  const filters = { J: document.getElementById('filter-J').checked, M: document.getElementById('filter-M').checked, FR: document.getElementById('filter-FR').checked, JM: document.getElementById('filter-JM').checked };
+  const prog = document.getElementById('notion-progress');
+  const progText = document.getElementById('notion-progress-text');
+  const progBar = document.getElementById('notion-progress-bar');
+  prog.style.display = 'block';
+  progText.textContent = 'Connexion à Notion…';
+  progBar.style.width = '20%';
+
+  try {
+    const formattedId = dbId.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
+    const resp = await fetch(`https://api.notion.com/v1/databases/${formattedId}/query`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Notion-Version': '2022-06-28' },
+      body: JSON.stringify({ page_size: 100 }),
+    });
+
+    progBar.style.width = '60%';
+    progText.textContent = 'Traitement des données…';
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.message || `Erreur ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const pages = data.results || [];
+    let added = 0, skipped = 0;
+
+    for (const page of pages) {
+      const props = page.properties || {};
+      let name = '';
+      for (const [key, val] of Object.entries(props)) {
+        if (val.type === 'title' && val.title?.length) { name = val.title.map(t => t.plain_text).join('').trim(); break; }
+      }
+      if (!name) continue;
+
+      let ownerKey = defaultOwner;
+      if (ownerProp && props[ownerProp]) {
+        const oprop = props[ownerProp];
+        let rawOwner = '';
+        if (oprop.type === 'select') rawOwner = oprop.select?.name || '';
+        else if (oprop.type === 'multi_select') rawOwner = oprop.multi_select?.map(o=>o.name).join(', ') || '';
+        else if (oprop.type === 'rich_text') rawOwner = oprop.rich_text?.map(t=>t.plain_text).join('') || '';
+        const low = rawOwner.toLowerCase();
+        if (low.includes('joueur 2') || low === 'j2') ownerKey = 'M';
+        else if (low.includes('familles') || low.includes(' fr') || low === 'fr') ownerKey = 'FR';
+        else if (low.includes('joueur 1') || low === 'j1') ownerKey = 'J';
+      }
+
+      if (!filters[ownerKey]) { skipped++; continue; }
+      if (state.games.find(g => g.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
+
+      state.games.push({ id: state.nextGameId++, name, owner: ownerKey, catId: detectCategory(name), players: '', duration: '' });
+      added++;
+    }
+
+    save();
+    progBar.style.width = '100%';
+    progText.textContent = `${added} jeux importés (${skipped} ignorés)`;
+    renderGamesTable();
+    renderCatGrid();
+    renderDashboard();
+    updateSidebarStats();
+    toast(`${added} jeux importés depuis Notion`, 'success');
+    setTimeout(() => { prog.style.display = 'none'; }, 3000);
+  } catch(e) {
+    progText.textContent = 'Erreur : ' + e.message;
+    progBar.style.width = '0%';
+    toast('Erreur Notion : ' + e.message, 'warn');
+  }
+}
+
+// ============================
+// IMPORT: CSV
+// ============================
+function handleCsvDrop(e) {
+  e.preventDefault();
+  document.getElementById('csv-drop').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) parseCsvFile(file);
+}
+function handleCsvFile(e) { if (e.target.files[0]) parseCsvFile(e.target.files[0]); }
+function parseCsvFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const lines = text.split('\n').filter(l => l.trim());
+    if (!lines.length) return;
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const headers = lines[0].split(sep).map(h => h.trim().replace(/"/g,''));
+    csvParsedData = lines.slice(1).map(line => {
+      const cols = line.split(sep).map(c => c.trim().replace(/"/g,''));
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = cols[i] || '');
+      return obj;
+    }).filter(r => Object.values(r).some(v => v));
+    document.getElementById('csv-preview-count').textContent = `${csvParsedData.length} lignes détectées. Colonnes : ${headers.join(', ')}`;
+    if (!document.getElementById('csv-name-col').value) document.getElementById('csv-name-col').value = headers[0] || '';
+    document.getElementById('csv-preview').style.display = 'block';
+    toast(`CSV lu : ${csvParsedData.length} lignes`, 'info');
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function confirmCsvImport() {
+  const nameCol = document.getElementById('csv-name-col').value.trim();
+  const ownerCol = document.getElementById('csv-owner-col').value.trim();
+  const defaultOwner = document.getElementById('csv-default-owner').value;
+  let added = 0;
+  csvParsedData.forEach(row => {
+    const name = (row[nameCol] || Object.values(row)[0] || '').trim();
+    if (!name) return;
+    if (state.games.find(g => g.name.toLowerCase() === name.toLowerCase())) return;
+    let ownerKey = defaultOwner;
+    if (ownerCol && row[ownerCol]) {
+      const low = row[ownerCol].toLowerCase();
+      if (low.includes('joueur 2') || low === 'j2') ownerKey = 'M';
+      else if (low.includes('familles') || low.includes('fr')) ownerKey = 'FR';
+      else if (low.includes('joueur 1') || low === 'j1') ownerKey = 'J';
+    }
+    state.games.push({ id: state.nextGameId++, name, owner: ownerKey, catId: detectCategory(name), players: '', duration: '' });
+    added++;
+  });
+  save();
+  renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
+  toast(`${added} jeux importés depuis le CSV`, 'success');
+  showPage('games');
+}
+
+// ============================
+// IMPORT: TEXT
+// ============================
+function importFromText() {
+  const text = document.getElementById('text-games').value.trim();
+  const owner = document.getElementById('text-owner').value;
+  if (!text) { toast('Entrez des jeux', 'warn'); return; }
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  let added = 0;
+  lines.forEach(name => {
+    if (state.games.find(g => g.name.toLowerCase() === name.toLowerCase())) return;
+    state.games.push({ id: state.nextGameId++, name, owner, catId: detectCategory(name), players: '', duration: '' });
+    added++;
+  });
+  save();
+  renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
+  document.getElementById('text-games').value = '';
+  toast(`${added} jeux importés`, 'success');
+  showPage('games');
+}
+
+// ============================
+// UTILS
+// ============================
+function switchImportTab(id, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('import-' + id).classList.add('active');
+  el.classList.add('active');
+}
+
+function populateCategorySelects() {
+  const opts = [
+    '<option value="">— Auto-détection —</option>',
+    ...state.categories.map(c => `<option value="${c.id}">${c.emoji} ${escHtml(c.name)}</option>`)
+  ].join('');
+  const s = document.getElementById('game-cat-input');
+  if (s) s.innerHTML = opts;
+}
+
+function populateSelect(id, options, selected) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = options.map(o => `<option value="${o.value}" ${o.value == selected ? 'selected' : ''}>${escHtml(String(o.label))}</option>`).join('');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = { success: '✓', info: 'ℹ', warn: '⚠' };
+  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span> ${msg}`;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+
+init();
+</script>
+</body>
+</html>
