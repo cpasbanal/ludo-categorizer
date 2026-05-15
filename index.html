@@ -1063,6 +1063,7 @@ class NotionAPI {
     this.dbId = raw.length === 32
       ? raw.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5')
       : dbId;
+    console.log(`[Notion] init dbId="${this.dbId}" token="${token.slice(0,12)}…"`);
     this.h = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -1071,10 +1072,27 @@ class NotionAPI {
   }
 
   async _req(path, opts = {}) {
-    const r = await fetch(`https://api.notion.com/v1${path}`, { headers: this.h, ...opts });
+    const url = `https://api.notion.com/v1${path}`;
+    console.log(`[Notion] ${opts.method || 'GET'} ${url}`);
+    let r;
+    try {
+      r = await fetch(url, { headers: this.h, ...opts });
+    } catch(networkErr) {
+      console.error('[Notion] Network/CORS error:', networkErr);
+      throw new Error(`Erreur réseau : ${networkErr.message} — vérifiez votre connexion et que Notion est accessible`);
+    }
+    console.log(`[Notion] HTTP ${r.status} ${r.statusText}`);
     if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      throw new Error(e.message || `HTTP ${r.status}`);
+      const text = await r.text().catch(() => '');
+      let body = {};
+      try { body = JSON.parse(text); } catch(_) {}
+      console.error('[Notion] Error response:', text);
+      const parts = [
+        `HTTP ${r.status}`,
+        body.code   ? `code=${body.code}` : null,
+        body.message || null,
+      ].filter(Boolean);
+      throw new Error(parts.join(' — '));
     }
     return r.json();
   }
@@ -1223,6 +1241,7 @@ async function syncFromNotion() {
     connStatus = 'ok';
   } catch(e) {
     connStatus = 'error';
+    console.error('[Notion] syncFromNotion failed:', e);
     toast('Erreur Notion : ' + e.message + ' — données locales utilisées', 'warn');
     loadGamesLocal();
   } finally {
@@ -1319,15 +1338,25 @@ async function testNotionConnection() {
   const statusEl = document.getElementById('settings-status');
   statusEl.textContent = 'Test en cours…';
   statusEl.className   = 'settings-status testing';
+
+  const api = new NotionAPI(token, dbId);
+  const debugInfo = `Token : ${token.slice(0,12)}… | DB ID formaté : ${api.dbId}`;
+  console.log('[Notion] testConnection —', debugInfo);
+
   try {
-    const api    = new NotionAPI(token, dbId);
     const db     = await api.testConnection();
     const dbName = (db.title || []).map(t => t.plain_text).join('') || db.id;
-    statusEl.textContent = '✓ Connexion réussie — base : ' + dbName;
-    statusEl.className   = 'settings-status ok';
+    console.log('[Notion] testConnection OK:', db);
+    statusEl.innerHTML = `✓ Connexion réussie — base : <strong>${escHtml(dbName)}</strong>`;
+    statusEl.className = 'settings-status ok';
   } catch(e) {
-    statusEl.textContent = '✗ Erreur : ' + e.message;
-    statusEl.className   = 'settings-status error';
+    console.error('[Notion] testConnection failed:', e);
+    statusEl.innerHTML = `✗ ${escHtml(e.message)}<br>
+      <small style="opacity:0.75;font-weight:400;">
+        ${escHtml(debugInfo)}<br>
+        Ouvrez la console (F12 → Onglet Console) pour les détails complets
+      </small>`;
+    statusEl.className = 'settings-status error';
   }
 }
 
