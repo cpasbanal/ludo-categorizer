@@ -1071,15 +1071,25 @@ class NotionAPI {
     };
   }
 
-  async _req(path, opts = {}) {
-    const url = `https://api.notion.com/v1${path}`;
-    console.log(`[Notion] ${opts.method || 'GET'} ${url}`);
+  async _req(path, opts = {}, _viaProxy = false) {
+    const base = _viaProxy
+      ? `https://corsproxy.io/?url=${encodeURIComponent('https://api.notion.com/v1' + path)}`
+      : `https://api.notion.com/v1${path}`;
+    console.log(`[Notion] ${opts.method || 'GET'} ${base}${_viaProxy ? ' (proxy)' : ''}`);
     let r;
     try {
-      r = await fetch(url, { headers: this.h, ...opts });
+      r = await fetch(base, { headers: this.h, ...opts });
     } catch(networkErr) {
       console.error('[Notion] Network/CORS error:', networkErr);
-      throw new Error(`Erreur réseau : ${networkErr.message} — vérifiez votre connexion et que Notion est accessible`);
+      if (!_viaProxy) {
+        console.warn('[Notion] Direct call failed, retrying via CORS proxy…');
+        return this._req(path, opts, true);
+      }
+      throw new Error(
+        `Erreur réseau : ${networkErr.message}\n` +
+        `• Testez en navigation privée (extensions désactivées)\n` +
+        `• Vérifiez qu'un pare-feu ne bloque pas api.notion.com`
+      );
     }
     console.log(`[Notion] HTTP ${r.status} ${r.statusText}`);
     if (!r.ok) {
@@ -1089,11 +1099,12 @@ class NotionAPI {
       console.error('[Notion] Error response:', text);
       const parts = [
         `HTTP ${r.status}`,
-        body.code   ? `code=${body.code}` : null,
+        body.code    ? `code=${body.code}` : null,
         body.message || null,
       ].filter(Boolean);
       throw new Error(parts.join(' — '));
     }
+    if (_viaProxy) console.log('[Notion] Proxy request succeeded');
     return r.json();
   }
 
