@@ -344,13 +344,18 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   font-family: var(--font-head); font-size: 0.95rem; font-weight: 800; color: var(--green-dark);
 }
 .cat-emoji { font-size: 1.2rem; }
-.cat-games-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; }
+.cat-games-list { display: flex; flex-wrap: wrap; gap: 5px; min-height: 36px; }
 .cat-game-pill {
   background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--r-xs); padding: 2px 8px;
+  border-radius: var(--r-xs); padding: 3px 10px;
   font-size: 0.73rem; color: var(--text-med); font-weight: 500;
+  cursor: grab; user-select: none; transition: opacity 0.15s, box-shadow 0.15s;
 }
+.cat-game-pill:active { cursor: grabbing; }
+.cat-game-pill.dragging { opacity: 0.35; }
 .cat-empty { font-size: 0.78rem; color: var(--muted); font-style: italic; padding: 3px 0; }
+.cat-card.drag-over { border-color: var(--green); background: var(--green-light); box-shadow: 0 0 0 2px var(--green-mid); }
+.cat-card.drag-over .cat-games-list { outline: 2px dashed var(--green-mid); outline-offset: 2px; border-radius: 4px; }
 .cat-count-badge {
   background: var(--green-light); color: var(--green-dark);
   border-radius: 20px; padding: 2px 9px;
@@ -2052,8 +2057,16 @@ function renderCatGrid() {
   const grid = document.getElementById('cat-grid');
   const catCards = state.categories.map(cat => {
     const games = state.games.filter(g => g.catId === cat.id && isGameVisible(g));
+    const pills = games.length === 0
+      ? '<span class="cat-empty">Aucun jeu — déposez ici</span>'
+      : games.map(g =>
+          `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="${cat.id}">${escHtml(g.name)}</span>`
+        ).join('');
     return `
-      <div class="cat-card">
+      <div class="cat-card" data-cat-id="${cat.id}"
+           ondragover="catDragOver(event,${cat.id})"
+           ondragleave="catDragLeave(event)"
+           ondrop="catDrop(event,${cat.id})">
         <div class="cat-card-header">
           <div class="cat-card-title">
             <span class="cat-emoji">${cat.emoji}</span>
@@ -2065,13 +2078,7 @@ function renderCatGrid() {
           </div>
         </div>
         ${cat.desc ? `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;">${escHtml(cat.desc)}</div>` : ''}
-        <div class="cat-games-list">
-          ${games.length === 0
-            ? '<span class="cat-empty">Aucun jeu</span>'
-            : games.map(g => `<span class="cat-game-pill">${escHtml(g.name)}</span>`).join('')
-          }
-        </div>
-        ${cat.keywords.length ? `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;"><div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px;">Mots-clés</div><div class="keyword-list">${cat.keywords.slice(0,5).map(k=>`<span class="keyword-tag" style="cursor:default;" onclick="">${k}</span>`).join('')}${cat.keywords.length>5?`<span style="font-size:0.7rem;color:var(--muted);">+${cat.keywords.length-5}</span>`:''}</div></div>` : ''}
+        <div class="cat-games-list">${pills}</div>
       </div>
     `;
   }).join('');
@@ -2081,6 +2088,57 @@ function renderCatGrid() {
       Nouvelle catégorie
     </div>
   `;
+  addCatDragListeners();
+}
+
+// ============================
+// CATEGORY DRAG & DROP
+// ============================
+let draggedGameId = null;
+
+function addCatDragListeners() {
+  document.querySelectorAll('.cat-game-pill[draggable]').forEach(pill => {
+    pill.addEventListener('dragstart', e => {
+      draggedGameId = parseInt(pill.dataset.gameId);
+      pill.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    pill.addEventListener('dragend', () => {
+      pill.classList.remove('dragging');
+      document.querySelectorAll('.cat-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+    });
+  });
+}
+
+function catDragOver(e, catId) {
+  if (draggedGameId === null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+
+function catDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+}
+
+async function catDrop(e, catId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (draggedGameId === null) return;
+  const game = state.games.find(g => g.id === draggedGameId);
+  draggedGameId = null;
+  if (!game || game.catId === catId) return;
+  game.catId = catId;
+  if (notion && game.notionId) {
+    try { await notion.update(game.notionId, game, getCatById(catId)?.name || ''); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+  save();
+  renderCatGrid();
+  renderGamesTable();
+  renderDashboard();
 }
 
 function renderDashboard() {
