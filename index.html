@@ -1357,6 +1357,25 @@ async function syncBidirectional() {
   }
 }
 
+async function refreshFromNotion() {
+  showLoading(true);
+  try {
+    const pages = await notion.queryAll();
+    state.games = notionPagesToGames(pages);
+    state.nextGameId = state.games.length ? Math.max(...state.games.map(g => g.id)) + 1 : 1;
+    saveGamesLocal();
+    connStatus = 'ok';
+    toast('Base locale mise à jour depuis Notion', 'success');
+  } catch(e) {
+    connStatus = 'error';
+    console.error('[Notion] refresh failed:', e);
+    toast('Erreur : ' + e.message, 'warn');
+  } finally {
+    showLoading(false);
+    updateConnDot();
+  }
+}
+
 async function manualSync() {
   if (!notion) return;
   await syncBidirectional();
@@ -1521,7 +1540,7 @@ async function saveSettingsAndSync() {
 
   if (token && dbId) {
     notion = new NotionAPI(token, dbId, buildMapping());
-    await syncBidirectional();
+    await refreshFromNotion();
     renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
   } else {
     notion = null;
