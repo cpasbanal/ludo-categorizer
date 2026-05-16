@@ -572,6 +572,21 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 .settings-status.ok      { background: var(--green-light); color: var(--green-dark); border: 1px solid var(--green-muted); }
 .settings-status.error   { background: #FFEBEE; color: #C62828; border: 1px solid #FFCDD2; }
 .settings-status.testing { background: var(--blue-light); color: var(--blue); border: 1px solid #BBDEFB; }
+
+/* ===== OWNER CHECKBOXES ===== */
+.owner-checks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.owner-check {
+  display: flex; align-items: center; gap: 5px; cursor: pointer;
+  font-size: 0.8rem; font-weight: 700; padding: 5px 12px;
+  border-radius: 20px; border: 1.5px solid var(--border2);
+  color: var(--muted); transition: all 0.15s; user-select: none;
+  font-family: var(--font-body);
+}
+.owner-check:hover { border-color: var(--green-mid); color: var(--text); }
+.owner-check input { display: none; }
+.owner-check.sel-J  { background: #E3F2FD; color: var(--col-J);  border-color: #BBDEFB; }
+.owner-check.sel-M  { background: #FFF3E0; color: var(--col-M);  border-color: #FFCCBC; }
+.owner-check.sel-FR { background: var(--green-light); color: var(--col-FR); border-color: var(--green-muted); }
 </style>
 </head>
 <body>
@@ -663,6 +678,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="page-title">Tous les jeux</div>
         </div>
         <div class="topbar-actions">
+          <button class="btn btn-secondary" id="btn-sync" onclick="manualSync()" style="display:none">⟳ Sync Notion</button>
           <button class="btn btn-secondary" onclick="recategorizeAll()">↻ Recatégoriser</button>
           <button class="btn btn-primary" onclick="openAddGame()">+ Ajouter</button>
         </div>
@@ -766,18 +782,16 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
                 <option value="J">Joueur 1</option>
                 <option value="M">Joueur 2</option>
                 <option value="FR">Familles Rurales</option>
-                <option value="JM">Joueur 1 & Joueur 2</option>
-              </select>
+                              </select>
             </div>
           </div>
           <div class="form-row">
             <div>
               <label>Filtrer uniquement les propriétaires</label>
               <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-J" checked> <span style="color:var(--accent3);">Joueur 1</span></label>
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-M" checked> <span style="color:var(--accent2);">Joueur 2</span></label>
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-FR" checked> <span style="color:var(--accent4);">Familles Rurales</span></label>
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-JM" checked> <span style="color:var(--accent);">Joueur 1 & Joueur 2</span></label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-J" checked> <span style="color:var(--col-J);">Joueur 1</span></label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-M" checked> <span style="color:var(--col-M);">Joueur 2</span></label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-FR" checked> <span style="color:var(--col-FR);">Familles Rurales</span></label>
               </div>
             </div>
           </div>
@@ -815,8 +829,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
                 <option value="J">Joueur 1</option>
                 <option value="M">Joueur 2</option>
                 <option value="FR">Familles Rurales</option>
-                <option value="JM">Joueur 1 & Joueur 2</option>
-              </select>
+                              </select>
             </div>
           </div>
           <div id="csv-preview" style="display:none;">
@@ -829,13 +842,12 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         <div id="import-text" class="tab-content">
           <div class="form-row">
             <div>
-              <label>Propriétaire pour cette liste</label>
-              <select id="text-owner">
-                <option value="J">Joueur 1</option>
-                <option value="M">Joueur 2</option>
-                <option value="FR">Familles Rurales</option>
-                <option value="JM">Joueur 1 & Joueur 2</option>
-              </select>
+              <label>Propriétaire(s) pour cette liste</label>
+              <div class="owner-checks" id="text-owner">
+                <label class="owner-check" onclick="toggleOwnerCheck(this,'J')"><input type="checkbox" value="J"> 👤 Joueur 1</label>
+                <label class="owner-check" onclick="toggleOwnerCheck(this,'M')"><input type="checkbox" value="M"> 👤 Joueur 2</label>
+                <label class="owner-check" onclick="toggleOwnerCheck(this,'FR')"><input type="checkbox" value="FR"> 🏠 Familles Rurales</label>
+              </div>
             </div>
           </div>
           <div class="form-row">
@@ -890,26 +902,47 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
 
         <div class="card">
-          <div class="card-title"><span class="icon">📋</span> Structure attendue dans Notion</div>
-          <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:12px;line-height:1.6;">
-            Créez une base de données Notion avec ces propriétés (noms exacts) :
+          <div class="card-title"><span class="icon">🗂</span> Correspondance des champs Notion</div>
+          <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:14px;line-height:1.6;">
+            Entrez le nom exact de chaque propriété dans votre base Notion (respectez la casse et les accents).
           </p>
-          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
-            <thead>
-              <tr>
-                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:0.7rem;letter-spacing:.06em;text-transform:uppercase;">Propriété</th>
-                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:0.7rem;letter-spacing:.06em;text-transform:uppercase;">Type</th>
-                <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:0.7rem;letter-spacing:.06em;text-transform:uppercase;">Valeurs</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Nom</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Titre</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">Nom du jeu (requis)</td></tr>
-              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Propriétaire</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Sélection</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">J, M, FR, JM</td></tr>
-              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Catégorie</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Sélection</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">Nom de la catégorie</td></tr>
-              <tr><td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:700;">Joueurs</td><td style="padding:7px 10px;border-bottom:1px solid var(--border);"><span class="cat-chip">Texte</span></td><td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);">ex : 2-6</td></tr>
-              <tr><td style="padding:7px 10px;font-weight:700;">Durée</td><td style="padding:7px 10px;"><span class="cat-chip">Texte</span></td><td style="padding:7px 10px;color:var(--muted);">ex : 30-60 min</td></tr>
-            </tbody>
-          </table>
+          <div class="form-row form-row-2">
+            <div>
+              <label>Nom du jeu <span style="font-weight:400;color:var(--muted);">(titre Notion)</span></label>
+              <input id="map-nom" placeholder="Nom" value="Nom">
+            </div>
+            <div>
+              <label>Propriétaire</label>
+              <input id="map-proprietaire" placeholder="Propriétaire" value="Propriétaire">
+            </div>
+          </div>
+          <div class="form-row form-row-2">
+            <div>
+              <label>Catégorie</label>
+              <input id="map-categorie" placeholder="Catégorie" value="Catégorie">
+            </div>
+            <div>
+              <label>Type du champ Propriétaire</label>
+              <select id="map-owner-type">
+                <option value="multi_select">Multi-sélection (J, M, FR)</option>
+                <option value="select">Sélection simple</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row form-row-2">
+            <div>
+              <label>Nb joueurs <span style="font-weight:400;color:var(--muted);">(laisser vide = ignorer)</span></label>
+              <input id="map-joueurs" placeholder="Joueurs" value="Joueurs">
+            </div>
+            <div>
+              <label>Durée <span style="font-weight:400;color:var(--muted);">(laisser vide = ignorer)</span></label>
+              <input id="map-duree" placeholder="Durée" value="Durée">
+            </div>
+          </div>
+          <div class="notion-info" style="margin-top:8px;margin-bottom:0;">
+            <strong>Valeurs attendues pour Propriétaire :</strong> <code>J</code> (Joueur 1), <code>M</code> (Joueur 2), <code>FR</code> (Familles Rurales)<br>
+            En multi-sélection, un jeu peut avoir plusieurs propriétaires simultanément.
+          </div>
         </div>
 
       </div>
@@ -934,16 +967,17 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         <input type="text" id="game-name-input" placeholder="Ex: Catan, Dixit, Skull…" oninput="autoDetectCategory()">
       </div>
     </div>
-    <div class="form-row form-row-2">
+    <div class="form-row">
       <div>
-        <label>Propriétaire *</label>
-        <select id="game-owner-input">
-          <option value="J">Joueur 1</option>
-          <option value="M">Joueur 2</option>
-          <option value="FR">Familles Rurales</option>
-          <option value="JM">Joueur 1 & Joueur 2</option>
-        </select>
+        <label>Propriétaire(s) *</label>
+        <div class="owner-checks" id="game-owner-input">
+          <label class="owner-check" onclick="toggleOwnerCheck(this,'J')"><input type="checkbox" value="J"> 👤 Joueur 1</label>
+          <label class="owner-check" onclick="toggleOwnerCheck(this,'M')"><input type="checkbox" value="M"> 👤 Joueur 2</label>
+          <label class="owner-check" onclick="toggleOwnerCheck(this,'FR')"><input type="checkbox" value="FR"> 🏠 Familles Rurales</label>
+        </div>
       </div>
+    </div>
+    <div class="form-row">
       <div>
         <label>Catégorie</label>
         <select id="game-cat-input">
@@ -1017,11 +1051,17 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         <input type="text" id="edit-game-name">
       </div>
     </div>
-    <div class="form-row form-row-2">
+    <div class="form-row">
       <div>
-        <label>Propriétaire</label>
-        <select id="edit-game-owner"></select>
+        <label>Propriétaire(s)</label>
+        <div class="owner-checks" id="edit-owner-input">
+          <label class="owner-check" onclick="toggleOwnerCheck(this,'J')"><input type="checkbox" value="J"> 👤 Joueur 1</label>
+          <label class="owner-check" onclick="toggleOwnerCheck(this,'M')"><input type="checkbox" value="M"> 👤 Joueur 2</label>
+          <label class="owner-check" onclick="toggleOwnerCheck(this,'FR')"><input type="checkbox" value="FR"> 🏠 Familles Rurales</label>
+        </div>
       </div>
+    </div>
+    <div class="form-row form-row-2">
       <div>
         <label>Catégorie</label>
         <select id="edit-game-cat"></select>
@@ -1044,26 +1084,43 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 // ============================
 // SETTINGS
 // ============================
-let settings = { notionToken: '', notionDbId: '' };
+const SETTINGS_DEFAULTS = {
+  notionToken: '', notionDbId: '',
+  propNom: 'Nom', propProprietaire: 'Propriétaire',
+  propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée',
+  ownerType: 'multi_select',
+};
+let settings = { ...SETTINGS_DEFAULTS };
 
 function loadSettings() {
-  try { settings = { notionToken: '', notionDbId: '', ...JSON.parse(localStorage.getItem('ludo_settings') || '{}') }; } catch(e) {}
+  try { settings = { ...SETTINGS_DEFAULTS, ...JSON.parse(localStorage.getItem('ludo_settings') || '{}') }; } catch(e) {}
 }
 function persistSettings() {
   localStorage.setItem('ludo_settings', JSON.stringify(settings));
+}
+function buildMapping() {
+  return {
+    propNom:          settings.propNom          || 'Nom',
+    propProprietaire: settings.propProprietaire || 'Propriétaire',
+    propCategorie:    settings.propCategorie    || 'Catégorie',
+    propJoueurs:      settings.propJoueurs      || '',
+    propDuree:        settings.propDuree        || '',
+    ownerType:        settings.ownerType        || 'multi_select',
+  };
 }
 
 // ============================
 // NOTION API
 // ============================
 class NotionAPI {
-  constructor(token, dbId) {
+  constructor(token, dbId, mapping) {
     this.token = token;
     const raw = dbId.replace(/-/g, '');
     this.dbId = raw.length === 32
       ? raw.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5')
       : dbId;
-    console.log(`[Notion] init dbId="${this.dbId}" token="${token.slice(0,12)}…"`);
+    this.m = mapping || buildMapping();
+    console.log(`[Notion] init dbId="${this.dbId}" token="${token.slice(0,12)}…" ownerType="${this.m.ownerType}"`);
     this.h = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -1142,13 +1199,19 @@ class NotionAPI {
   }
 
   _props(game, catName) {
+    const m = this.m;
+    const owners = normalizeOwner(game.owner);
     const p = {
-      'Nom':          { title:     [{ text: { content: game.name     || '' } }] },
-      'Propriétaire': { select:    { name: game.owner    || 'J'      } },
-      'Joueurs':      { rich_text: [{ text: { content: game.players  || '' } }] },
-      'Durée':        { rich_text: [{ text: { content: game.duration || '' } }] },
+      [m.propNom]: { title: [{ text: { content: game.name || '' } }] },
     };
-    if (catName) p['Catégorie'] = { select: { name: catName } };
+    if (m.ownerType === 'multi_select') {
+      p[m.propProprietaire] = { multi_select: owners.map(o => ({ name: o })) };
+    } else {
+      p[m.propProprietaire] = { select: { name: owners[0] || 'J' } };
+    }
+    if (catName && m.propCategorie) p[m.propCategorie] = { select: { name: catName } };
+    if (m.propJoueurs) p[m.propJoueurs] = { rich_text: [{ text: { content: game.players  || '' } }] };
+    if (m.propDuree)   p[m.propDuree]   = { rich_text: [{ text: { content: game.duration || '' } }] };
     return p;
   }
 }
@@ -1167,11 +1230,16 @@ let state = {
 };
 
 const OWNERS = {
-  J:  { label: 'Joueur 1',            cls: 'owner-J',  icon: '👤' },
-  M:  { label: 'Joueur 2',            cls: 'owner-M',  icon: '👤' },
-  FR: { label: 'Familles Rurales',    cls: 'owner-FR', icon: '🏠' },
-  JM: { label: 'Joueur 1 & Joueur 2', cls: 'owner-JM', icon: '👥' },
+  J:  { label: 'Joueur 1',         cls: 'owner-J',  icon: '👤' },
+  M:  { label: 'Joueur 2',         cls: 'owner-M',  icon: '👤' },
+  FR: { label: 'Familles Rurales', cls: 'owner-FR', icon: '🏠' },
 };
+
+function normalizeOwner(owner) {
+  if (Array.isArray(owner)) return owner.filter(o => OWNERS[o] || o === 'JM');
+  if (owner === 'JM') return ['J', 'M'];
+  return OWNERS[owner] ? [owner] : ['J'];
+}
 
 const DEFAULT_CATEGORIES = [
   { name: 'Puzzle & Logique',    emoji: '🧩', desc: 'Casse-têtes, déduction, réflexion', keywords: ['puzzle','logic','casse','iq','rush hour','kanoodle','ubongo','katamino','tangram','quoridor','patchwork','blokus','azul','sagrada','cascadia','project l','mondrian','chromino','ingenious','tetris','perplexus','labyrinth','labyrinthe'] },
@@ -1200,8 +1268,8 @@ async function init() {
   loadSettings();
   loadCategories();
   if (settings.notionToken && settings.notionDbId) {
-    notion = new NotionAPI(settings.notionToken, settings.notionDbId);
-    await syncFromNotion();
+    notion = new NotionAPI(settings.notionToken, settings.notionDbId, buildMapping());
+    await syncBidirectional();
   } else {
     loadGamesLocal();
   }
@@ -1240,20 +1308,48 @@ function saveCategories() {
 }
 
 // ============================
-// GAMES: NOTION SYNC
+// GAMES: BIDIRECTIONAL SYNC
 // ============================
-async function syncFromNotion() {
+async function syncBidirectional() {
   showLoading(true);
   try {
-    const pages = await notion.queryAll();
-    state.games = notionPagesToGames(pages);
-    state.nextGameId = state.games.length ? Math.max(...state.games.map(g => g.id)) + 1 : 1;
+    const notionPages = await notion.queryAll();
+    const notionGames = notionPagesToGames(notionPages);
+
+    // Build lookup maps
+    const localByNotionId = new Map(state.games.filter(g => g.notionId).map(g => [g.notionId, g]));
+    const unsynced = state.games.filter(g => !g.notionId);
+
+    // Notion-side games: Notion wins for data, preserve local IDs where possible
+    let nextId = state.games.length ? Math.max(...state.games.map(g => g.id), 0) + 1 : 1;
+    const merged = notionGames.map(ng => {
+      const local = localByNotionId.get(ng.notionId);
+      return { ...ng, id: local ? local.id : nextId++ };
+    });
+
+    // Push local-only games to Notion
+    let pushed = 0;
+    for (const g of unsynced) {
+      try {
+        const page = await notion.create(g, getCatById(g.catId)?.name || '');
+        g.notionId = page.id;
+        pushed++;
+      } catch(e) {
+        console.warn('[Notion] Failed to push local game:', g.name, e.message);
+      }
+      merged.push({ ...g, id: g.id || nextId++ });
+    }
+
+    state.games = merged;
+    state.nextGameId = merged.length ? Math.max(...merged.map(g => g.id)) + 1 : 1;
     saveGamesLocal();
     connStatus = 'ok';
+    const msg = `Sync OK : ${notionGames.length} depuis Notion` + (pushed ? `, ${pushed} envoyé(s)` : '');
+    toast(msg, 'success');
   } catch(e) {
     connStatus = 'error';
-    console.error('[Notion] syncFromNotion failed:', e);
-    toast('Erreur Notion : ' + e.message + ' — données locales utilisées', 'warn');
+    console.error('[Notion] sync failed:', e);
+    toast('Erreur sync : ' + e.message, 'warn');
     loadGamesLocal();
   } finally {
     showLoading(false);
@@ -1261,23 +1357,50 @@ async function syncFromNotion() {
   }
 }
 
+async function manualSync() {
+  if (!notion) return;
+  await syncBidirectional();
+  renderGamesTable();
+  renderCatGrid();
+  renderDashboard();
+  updateSidebarStats();
+}
+
 function notionPagesToGames(pages) {
+  const m = notion?.m || buildMapping();
   let id = 1;
   return pages.map(page => {
     const props = page.properties || {};
+
+    // Name: try configured prop, fallback to any title prop
     let name = '';
-    for (const val of Object.values(props)) {
-      if (val.type === 'title' && val.title?.length) { name = val.title.map(t => t.plain_text).join('').trim(); break; }
+    const nomProp = props[m.propNom];
+    if (nomProp?.type === 'title') name = nomProp.title.map(t => t.plain_text).join('').trim();
+    if (!name) {
+      for (const val of Object.values(props)) {
+        if (val.type === 'title' && val.title?.length) { name = val.title.map(t => t.plain_text).join('').trim(); break; }
+      }
     }
     if (!name) return null;
-    const ownerRaw = props['Propriétaire']?.select?.name || '';
-    const owner    = ['J','M','FR','JM'].includes(ownerRaw) ? ownerRaw : 'J';
-    const catName  = props['Catégorie']?.select?.name || '';
-    const cat      = state.categories.find(c => c.name === catName);
-    const catId    = cat ? cat.id : detectCategory(name);
-    const players  = (props['Joueurs']?.rich_text || []).map(t => t.plain_text).join('');
-    const duration = (props['Durée']?.rich_text   || []).map(t => t.plain_text).join('');
-    return { id: id++, name, owner, catId, players, duration, notionId: page.id };
+
+    // Owner: handle both multi_select and select
+    const ownerProp = props[m.propProprietaire];
+    let owners = ['J'];
+    if (ownerProp?.type === 'multi_select') {
+      owners = ownerProp.multi_select.map(o => o.name).filter(o => OWNERS[o]);
+      if (!owners.length) owners = ['J'];
+    } else if (ownerProp?.type === 'select') {
+      const v = ownerProp.select?.name || '';
+      owners = normalizeOwner(v);
+    }
+
+    const catName = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
+    const cat     = state.categories.find(c => c.name === catName);
+    const catId   = cat ? cat.id : detectCategory(name);
+    const players  = m.propJoueurs ? (props[m.propJoueurs]?.rich_text || []).map(t => t.plain_text).join('') : '';
+    const duration = m.propDuree   ? (props[m.propDuree]?.rich_text   || []).map(t => t.plain_text).join('') : '';
+
+    return { id: id++, name, owner: owners, catId, players, duration, notionId: page.id };
   }).filter(Boolean);
 }
 
@@ -1304,6 +1427,8 @@ async function syncNewGamesToNotion() {
 function loadGamesLocal() {
   const s = localStorage.getItem('ludo_games');
   if (s) { try { state.games = JSON.parse(s); } catch(e) {} }
+  // Migrate legacy string owners to arrays
+  state.games = state.games.map(g => ({ ...g, owner: normalizeOwner(g.owner) }));
   if (state.games.length) state.nextGameId = Math.max(...state.games.map(g => g.id)) + 1;
 }
 
@@ -1321,10 +1446,13 @@ function save() {
 // ============================
 function updateConnDot() {
   const dot = document.getElementById('conn-dot');
-  if (!dot) return;
-  dot.className = 'conn-dot ' + connStatus;
-  const t = { unconfigured: 'Notion non configuré', ok: 'Connecté à Notion', error: 'Erreur de connexion Notion' };
-  dot.title = t[connStatus] || '';
+  if (dot) {
+    dot.className = 'conn-dot ' + connStatus;
+    const t = { unconfigured: 'Notion non configuré', ok: 'Connecté à Notion', error: 'Erreur de connexion Notion' };
+    dot.title = t[connStatus] || '';
+  }
+  const syncBtn = document.getElementById('btn-sync');
+  if (syncBtn) syncBtn.style.display = (notion && connStatus !== 'unconfigured') ? '' : 'none';
 }
 
 function showLoading(show) {
@@ -1335,8 +1463,14 @@ function showLoading(show) {
 // SETTINGS PAGE
 // ============================
 function renderSettingsPage() {
-  document.getElementById('settings-token').value = settings.notionToken || '';
-  document.getElementById('settings-dbid').value  = settings.notionDbId  || '';
+  document.getElementById('settings-token').value    = settings.notionToken         || '';
+  document.getElementById('settings-dbid').value     = settings.notionDbId          || '';
+  document.getElementById('map-nom').value           = settings.propNom             || 'Nom';
+  document.getElementById('map-proprietaire').value  = settings.propProprietaire    || 'Propriétaire';
+  document.getElementById('map-categorie').value     = settings.propCategorie       || 'Catégorie';
+  document.getElementById('map-joueurs').value       = settings.propJoueurs         || 'Joueurs';
+  document.getElementById('map-duree').value         = settings.propDuree           || 'Durée';
+  document.getElementById('map-owner-type').value    = settings.ownerType           || 'multi_select';
   const st = document.getElementById('settings-status');
   st.textContent = '';
   st.className   = 'settings-status';
@@ -1375,26 +1509,19 @@ async function saveSettingsAndSync() {
   const token = document.getElementById('settings-token').value.trim();
   const dbId  = document.getElementById('settings-dbid').value.trim();
   const wasConfigured = !!(settings.notionToken && settings.notionDbId);
-  settings.notionToken = token;
-  settings.notionDbId  = dbId;
+  settings.notionToken         = token;
+  settings.notionDbId          = dbId;
+  settings.propNom             = document.getElementById('map-nom').value.trim()          || 'Nom';
+  settings.propProprietaire    = document.getElementById('map-proprietaire').value.trim() || 'Propriétaire';
+  settings.propCategorie       = document.getElementById('map-categorie').value.trim()    || '';
+  settings.propJoueurs         = document.getElementById('map-joueurs').value.trim()      || '';
+  settings.propDuree           = document.getElementById('map-duree').value.trim()        || '';
+  settings.ownerType           = document.getElementById('map-owner-type').value;
   persistSettings();
 
   if (token && dbId) {
-    notion = new NotionAPI(token, dbId);
-    if (!wasConfigured && state.games.length) {
-      if (confirm(`Pousser ${state.games.length} jeu(x) local/locaux vers Notion avant synchronisation ?`)) {
-        showLoading(true);
-        for (const g of state.games) {
-          try {
-            const page = await notion.create(g, getCatById(g.catId)?.name || '');
-            g.notionId = page.id;
-          } catch(e) { /* best effort */ }
-        }
-        saveGamesLocal();
-        showLoading(false);
-      }
-    }
-    await syncFromNotion();
+    notion = new NotionAPI(token, dbId, buildMapping());
+    await syncBidirectional();
     renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
   } else {
     notion = null;
@@ -1475,15 +1602,44 @@ function detectCategory(gameName) {
 function getCatById(id) { return state.categories.find(c => c.id === id); }
 function getOwner(key) { return OWNERS[key] || { label: key, cls: 'owner-J', icon: '👤' }; }
 
-function ownerBadgeHtml(ownerKey) {
-  const o = getOwner(ownerKey);
-  return `<span class="owner-badge ${o.cls}">${o.icon} ${o.label}</span>`;
+function ownerBadgeHtml(owner) {
+  return normalizeOwner(owner).map(k => {
+    const o = OWNERS[k] || { label: k, cls: 'owner-J', icon: '👤' };
+    return `<span class="owner-badge ${o.cls}">${o.icon} ${o.label}</span>`;
+  }).join(' ');
 }
 
 function catChipHtml(catId) {
   const cat = getCatById(catId);
   if (!cat) return '<span class="cat-chip uncategorized">Non catégorisé</span>';
   return `<span class="cat-chip">${cat.emoji} ${cat.name}</span>`;
+}
+
+// ============================
+// OWNER CHECKBOX HELPERS
+// ============================
+function toggleOwnerCheck(label, key) {
+  const cb = label.querySelector('input');
+  cb.checked = !cb.checked;
+  ['J','M','FR'].forEach(k => label.classList.remove('sel-' + k));
+  if (cb.checked) label.classList.add('sel-' + key);
+}
+
+function getSelectedOwners(containerId) {
+  const checks = document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`);
+  const vals = Array.from(checks).map(c => c.value);
+  return vals.length ? vals : ['J'];
+}
+
+function setOwnerChecks(containerId, owners) {
+  const arr = normalizeOwner(owners);
+  document.querySelectorAll(`#${containerId} .owner-check`).forEach(label => {
+    const cb = label.querySelector('input');
+    const key = cb.value;
+    cb.checked = arr.includes(key);
+    ['J','M','FR'].forEach(k => label.classList.remove('sel-' + k));
+    if (cb.checked) label.classList.add('sel-' + key);
+  });
 }
 
 // ============================
@@ -1494,6 +1650,7 @@ function openAddGame() {
   document.getElementById('game-players-input').value = '';
   document.getElementById('game-duration-input').value = '';
   document.getElementById('auto-cat-preview').style.display = 'none';
+  setOwnerChecks('game-owner-input', ['J']);
   document.getElementById('modal-add-game').classList.add('open');
   document.getElementById('game-name-input').focus();
 }
@@ -1518,7 +1675,7 @@ function autoDetectCategory() {
 async function saveGame() {
   const name = document.getElementById('game-name-input').value.trim();
   if (!name) { toast('Entrez un nom de jeu', 'warn'); return; }
-  const owner = document.getElementById('game-owner-input').value;
+  const owner = getSelectedOwners('game-owner-input');
   const catSel = document.getElementById('game-cat-input').value;
   const catId = catSel ? parseInt(catSel) : (detectCategory(name) || null);
   const game = {
@@ -1553,7 +1710,7 @@ function editGame(id) {
   if (!g) return;
   document.getElementById('edit-game-id').value = id;
   document.getElementById('edit-game-name').value = g.name;
-  populateSelect('edit-game-owner', Object.entries(OWNERS).map(([v,o]) => ({ value: v, label: o.label })), g.owner);
+  setOwnerChecks('edit-owner-input', g.owner);
   populateSelect('edit-game-cat',
     [{ value: '', label: '— Non catégorisé —' }, ...state.categories.map(c => ({ value: c.id, label: c.emoji + ' ' + c.name }))],
     g.catId || '');
@@ -1567,7 +1724,7 @@ async function updateGame() {
   const g  = state.games.find(x => x.id === id);
   if (!g) return;
   g.name     = document.getElementById('edit-game-name').value.trim();
-  g.owner    = document.getElementById('edit-game-owner').value;
+  g.owner    = getSelectedOwners('edit-owner-input');
   const catVal = document.getElementById('edit-game-cat').value;
   g.catId    = catVal ? parseInt(catVal) : null;
   g.players  = document.getElementById('edit-game-players').value.trim();
@@ -1690,7 +1847,7 @@ function renderGamesTable() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
   let games = state.games;
   if (q) games = games.filter(g => g.name.toLowerCase().includes(q));
-  if (activeOwnerFilter !== 'all') games = games.filter(g => g.owner === activeOwnerFilter);
+  if (activeOwnerFilter !== 'all') games = games.filter(g => normalizeOwner(g.owner).includes(activeOwnerFilter));
 
   const tbody = document.getElementById('games-tbody');
   const empty = document.getElementById('games-empty');
@@ -1756,7 +1913,7 @@ function renderDashboard() {
   const catCount = state.categories.length;
   const ownerCounts = {};
   Object.keys(OWNERS).forEach(k => ownerCounts[k] = 0);
-  state.games.forEach(g => { if (ownerCounts[g.owner] !== undefined) ownerCounts[g.owner]++; });
+  state.games.forEach(g => { normalizeOwner(g.owner).forEach(k => { if (k in ownerCounts) ownerCounts[k]++; }); });
   const uncategorized = state.games.filter(g => !g.catId).length;
 
   document.getElementById('dashboard-stats').innerHTML = `
@@ -1809,8 +1966,8 @@ function renderDashboard() {
 function renderOwnerFilters() {
   const row = document.getElementById('owner-filters');
   row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Filtrer :</span>
-    <button class="filter-chip active" onclick="setOwnerFilter('all', this)">Tous</button>
-    ${Object.entries(OWNERS).map(([k,o]) => `<button class="filter-chip" onclick="setOwnerFilter('${k}', this)">${o.label}</button>`).join('')}
+    <button class="filter-chip active" onclick="setOwnerFilter('all',this)">Tous</button>
+    ${Object.entries(OWNERS).map(([k,o]) => `<button class="filter-chip" onclick="setOwnerFilter('${k}',this)">${o.icon} ${o.label}</button>`).join('')}
   `;
 }
 
@@ -1839,7 +1996,7 @@ async function importFromNotion() {
   if (!token) { toast('Entrez votre token Notion', 'warn'); return; }
   if (!dbId) { toast('Entrez l\'ID de la base', 'warn'); return; }
 
-  const filters = { J: document.getElementById('filter-J').checked, M: document.getElementById('filter-M').checked, FR: document.getElementById('filter-FR').checked, JM: document.getElementById('filter-JM').checked };
+  const filters = { J: document.getElementById('filter-J').checked, M: document.getElementById('filter-M').checked, FR: document.getElementById('filter-FR').checked };
   const prog = document.getElementById('notion-progress');
   const progText = document.getElementById('notion-progress-text');
   const progBar = document.getElementById('notion-progress-bar');
@@ -1875,23 +2032,31 @@ async function importFromNotion() {
       }
       if (!name) continue;
 
-      let ownerKey = defaultOwner;
+      let owners = normalizeOwner(defaultOwner);
       if (ownerProp && props[ownerProp]) {
         const oprop = props[ownerProp];
-        let rawOwner = '';
-        if (oprop.type === 'select') rawOwner = oprop.select?.name || '';
-        else if (oprop.type === 'multi_select') rawOwner = oprop.multi_select?.map(o=>o.name).join(', ') || '';
-        else if (oprop.type === 'rich_text') rawOwner = oprop.rich_text?.map(t=>t.plain_text).join('') || '';
-        const low = rawOwner.toLowerCase();
-        if (low.includes('joueur 2') || low === 'j2') ownerKey = 'M';
-        else if (low.includes('familles') || low.includes(' fr') || low === 'fr') ownerKey = 'FR';
-        else if (low.includes('joueur 1') || low === 'j1') ownerKey = 'J';
+        if (oprop.type === 'multi_select') {
+          const vals = oprop.multi_select.map(o => o.name).filter(o => OWNERS[o]);
+          if (vals.length) owners = vals;
+        } else {
+          let rawOwner = '';
+          if (oprop.type === 'select') rawOwner = oprop.select?.name || '';
+          else if (oprop.type === 'rich_text') rawOwner = oprop.rich_text?.map(t=>t.plain_text).join('') || '';
+          if (OWNERS[rawOwner]) owners = [rawOwner];
+          else {
+            const low = rawOwner.toLowerCase();
+            if (low.includes('joueur 2') || low === 'j2') owners = ['M'];
+            else if (low.includes('familles') || low === 'fr') owners = ['FR'];
+            else if (low.includes('joueur 1') || low === 'j1') owners = ['J'];
+          }
+        }
       }
 
-      if (!filters[ownerKey]) { skipped++; continue; }
+      // skip if none of the owners pass the filter
+      if (!owners.some(k => filters[k])) { skipped++; continue; }
       if (state.games.find(g => g.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
 
-      state.games.push({ id: state.nextGameId++, name, owner: ownerKey, catId: detectCategory(name), players: '', duration: '' });
+      state.games.push({ id: state.nextGameId++, name, owner: owners, catId: detectCategory(name), players: '', duration: '' });
       added++;
     }
 
@@ -1953,14 +2118,14 @@ async function confirmCsvImport() {
     const name = (row[nameCol] || Object.values(row)[0] || '').trim();
     if (!name) return;
     if (state.games.find(g => g.name.toLowerCase() === name.toLowerCase())) return;
-    let ownerKey = defaultOwner;
+    let owners = normalizeOwner(defaultOwner);
     if (ownerCol && row[ownerCol]) {
       const low = row[ownerCol].toLowerCase();
-      if      (low.includes('joueur 2') || low === 'j2') ownerKey = 'M';
-      else if (low.includes('familles') || low.includes('fr')) ownerKey = 'FR';
-      else if (low.includes('joueur 1') || low === 'j1') ownerKey = 'J';
+      if      (low.includes('joueur 2') || low === 'j2') owners = ['M'];
+      else if (low.includes('familles') || low === 'fr') owners = ['FR'];
+      else if (low.includes('joueur 1') || low === 'j1') owners = ['J'];
     }
-    state.games.push({ id: state.nextGameId++, name, owner: ownerKey, catId: detectCategory(name), players: '', duration: '' });
+    state.games.push({ id: state.nextGameId++, name, owner: owners, catId: detectCategory(name), players: '', duration: '' });
     added++;
   });
   if (notion) await syncNewGamesToNotion();
@@ -1975,7 +2140,7 @@ async function confirmCsvImport() {
 // ============================
 async function importFromText() {
   const text  = document.getElementById('text-games').value.trim();
-  const owner = document.getElementById('text-owner').value;
+  const owner = getSelectedOwners('text-owner');
   if (!text) { toast('Entrez des jeux', 'warn'); return; }
   const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
   let added = 0;
