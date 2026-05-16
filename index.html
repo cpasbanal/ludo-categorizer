@@ -709,7 +709,8 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
       <div style="padding: 24px;">
         <div class="search-bar">
           <span class="search-bar-icon">🔍</span>
-          <input type="text" id="search-input" placeholder="Rechercher un jeu…" oninput="renderGamesTable()">
+          <input type="text" id="search-input" placeholder="Rechercher un jeu… (appuyez sur /)" oninput="renderGamesTable(); document.getElementById('search-clear').style.display=this.value?'flex':'none';">
+          <button id="search-clear" onclick="document.getElementById('search-input').value='';this.style.display='none';renderGamesTable();" title="Effacer" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;color:var(--muted);padding:2px 6px;line-height:1;">×</button>
         </div>
         <div class="filter-row" id="owner-filters">
           <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Propriétaire :</span>
@@ -971,6 +972,23 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
 
         <div class="card">
+          <div class="card-title"><span class="icon">✨</span> Intelligence Artificielle</div>
+          <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:14px;line-height:1.6;">
+            Utilisez Claude (Anthropic) pour catégoriser automatiquement vos jeux.<br>
+            Clé API disponible sur <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a>.
+          </p>
+          <div class="form-row">
+            <div>
+              <label>Clé API Claude</label>
+              <input type="password" id="settings-claude-key" placeholder="sk-ant-…" autocomplete="off">
+            </div>
+          </div>
+          <p style="font-size:0.78rem;color:var(--muted);margin-top:6px;">
+            La clé est stockée uniquement dans votre navigateur (localStorage).
+          </p>
+        </div>
+
+        <div class="card">
           <div class="card-title"><span class="icon">👥</span> Propriétaires</div>
           <div id="owners-settings-list"></div>
           <div class="form-row form-row-3" style="margin-top:14px;">
@@ -1017,6 +1035,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     </label>
     <div class="modal-footer" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeModal('modal-recat')">Annuler</button>
+      <button class="btn btn-secondary" id="btn-recat-ai" onclick="runAICategorize()" title="Catégoriser avec Claude AI">✨ Avec l'IA</button>
       <button class="btn btn-primary" onclick="runRecategorize()">↻ Recatégoriser</button>
     </div>
   </div>
@@ -1146,6 +1165,7 @@ const SETTINGS_DEFAULTS = {
   propNom: 'Nom', propProprietaire: 'Propriétaire',
   propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée',
   ownerType: 'multi_select',
+  claudeApiKey: '',
 };
 let settings = { ...SETTINGS_DEFAULTS };
 
@@ -1313,7 +1333,6 @@ class NotionAPI {
       p[m.propProprietaire] = { select: { name: owners[0] || 'J' } };
     }
     if (catName && m.propCategorie) p[m.propCategorie] = { select: { name: catName } };
-    if (m.propJoueurs) p[m.propJoueurs] = { rich_text: [{ text: { content: game.players  || '' } }] };
     if (m.propDuree)   p[m.propDuree]   = { rich_text: [{ text: { content: game.duration || '' } }] };
     p['Exclure de la sélection'] = { checkbox: !!game.hidden };
     return p;
@@ -1619,7 +1638,15 @@ function notionPagesToGames(pages) {
     const catName = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
     const cat     = state.categories.find(c => c.name === catName);
     const catId   = cat ? cat.id : detectCategory(name);
-    const players  = m.propJoueurs ? (props[m.propJoueurs]?.rich_text || []).map(t => t.plain_text).join('') : '';
+
+    // Players: prefer "Joueurs min" / "Joueurs max" number fields (from BGG sync), fallback to text field
+    let players = m.propJoueurs ? (props[m.propJoueurs]?.rich_text || []).map(t => t.plain_text).join('') : '';
+    const pMin = props['Joueurs min']?.number;
+    const pMax = props['Joueurs max']?.number;
+    if (pMin != null || pMax != null) {
+      players = pMin != null && pMax != null && pMin !== pMax ? `${pMin}-${pMax}` : String(pMin ?? pMax ?? '');
+    }
+
     const duration = m.propDuree   ? (props[m.propDuree]?.rich_text   || []).map(t => t.plain_text).join('') : '';
 
     return { id: id++, name, owner: owners, catId, players, duration, hidden, notionId: page.id };
@@ -1702,6 +1729,7 @@ function renderSettingsPage() {
   document.getElementById('map-joueurs').value       = settings.propJoueurs         || 'Joueurs';
   document.getElementById('map-duree').value         = settings.propDuree           || 'Durée';
   document.getElementById('map-owner-type').value    = settings.ownerType           || 'multi_select';
+  document.getElementById('settings-claude-key').value = settings.claudeApiKey      || '';
   const st = document.getElementById('settings-status');
   st.textContent = '';
   st.className   = 'settings-status';
@@ -1748,6 +1776,7 @@ async function saveSettingsAndSync() {
   settings.propJoueurs         = document.getElementById('map-joueurs').value.trim()      || '';
   settings.propDuree           = document.getElementById('map-duree').value.trim()        || '';
   settings.ownerType           = document.getElementById('map-owner-type').value;
+  settings.claudeApiKey        = document.getElementById('settings-claude-key').value.trim();
   persistSettings();
 
   if (token && dbId) {
@@ -1999,6 +2028,8 @@ function openRecatModal() {
     `<strong>${uncategorized}</strong> jeu${uncategorized > 1 ? 'x' : ''} non catégorisé${uncategorized > 1 ? 's' : ''} sur ${total}.<br>` +
     `Par défaut, seuls les jeux sans catégorie seront traités.`;
   document.getElementById('recat-force').checked = false;
+  const aiBtn = document.getElementById('btn-recat-ai');
+  if (aiBtn) aiBtn.style.display = settings.claudeApiKey ? '' : 'none';
   document.getElementById('modal-recat').classList.add('open');
 }
 
@@ -2017,6 +2048,100 @@ function runRecategorize() {
   renderCatGrid();
   renderDashboard();
   toast(`${count} jeu${count > 1 ? 'x' : ''} recatégorisé${count > 1 ? 's' : ''}`, 'success');
+}
+
+// ============================
+// AI AUTO-CATEGORIZATION
+// ============================
+async function runAICategorize() {
+  if (!settings.claudeApiKey) {
+    toast('Ajoutez votre clé API Claude dans les Paramètres', 'warn');
+    return;
+  }
+  if (!state.categories.length) {
+    toast('Créez au moins une catégorie avant de lancer l\'IA', 'warn');
+    return;
+  }
+  const force = document.getElementById('recat-force').checked;
+  const targets = state.games.filter(g => force || !g.catId);
+  if (!targets.length) {
+    toast('Aucun jeu à catégoriser', 'info');
+    return;
+  }
+
+  closeModal('modal-recat');
+  toast(`✨ Envoi de ${targets.length} jeux à Claude…`, 'info');
+
+  const catList = state.categories
+    .map(c => `- "${c.name}" (${c.emoji}${c.desc ? ': ' + c.desc : ''})`)
+    .join('\n');
+  const gameList = targets.map(g => g.name).join('\n');
+
+  const prompt = `Tu es un assistant de ludothèque. Catégorise chaque jeu de société dans l'une des catégories ci-dessous.
+
+Catégories disponibles :
+${catList}
+
+Jeux à catégoriser (un par ligne) :
+${gameList}
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, de la forme :
+{"NomDuJeu": "NomDeLaCatégorie", ...}
+
+Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
+
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://api.anthropic.com/v1/messages')}`;
+  let raw;
+  try {
+    const res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        'x-api-key': settings.claudeApiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status} — ${err.slice(0, 120)}`);
+    }
+    raw = await res.json();
+  } catch(e) {
+    toast('Erreur IA : ' + e.message, 'error');
+    dbg('runAICategorize error: ' + e.message, 'error');
+    return;
+  }
+
+  const text = raw?.content?.[0]?.text || '';
+  dbg('IA réponse : ' + text.slice(0, 200));
+
+  let mapping = {};
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Pas de JSON dans la réponse');
+    mapping = JSON.parse(jsonMatch[0]);
+  } catch(e) {
+    toast('Impossible de lire la réponse de l\'IA', 'error');
+    dbg('Parse erreur : ' + e.message, 'error');
+    return;
+  }
+
+  let count = 0;
+  for (const game of targets) {
+    const catName = mapping[game.name];
+    if (!catName) continue;
+    const cat = state.categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+    if (cat && game.catId !== cat.id) { game.catId = cat.id; count++; }
+  }
+
+  save();
+  renderGamesTable(); renderCatFilters(); renderCatGrid(); renderDashboard();
+  toast(`✨ ${count} jeu${count > 1 ? 'x' : ''} catégorisé${count > 1 ? 's' : ''} par l'IA`, 'success');
 }
 
 // ============================
@@ -2072,6 +2197,25 @@ function saveCategory() {
   updateSidebarStats();
   closeModal('modal-add-category');
   toast(`Catégorie "${name}" créée`, 'success');
+}
+
+function editCategoryName(id) {
+  const cat = getCatById(id);
+  if (!cat) return;
+  const newName = prompt(`Renommer la catégorie "${cat.name}" :`, cat.name);
+  if (!newName || newName.trim() === cat.name) return;
+  const trimmed = newName.trim();
+  if (state.categories.some(c => c.id !== id && c.name.toLowerCase() === trimmed.toLowerCase())) {
+    toast('Une catégorie avec ce nom existe déjà', 'warn');
+    return;
+  }
+  cat.name = trimmed;
+  save();
+  populateCategorySelects();
+  renderCatFilters();
+  renderCatGrid();
+  renderGamesTable();
+  toast(`Catégorie renommée en "${trimmed}"`, 'success');
 }
 
 function deleteCategory(id) {
@@ -2178,6 +2322,7 @@ function renderCatGrid() {
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="cat-count-badge">${games.length}</span>
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="editCategoryName(${cat.id})" title="Renommer">✏️</button>
             <button class="btn btn-danger btn-sm btn-icon" onclick="deleteCategory(${cat.id})" title="Supprimer">✕</button>
           </div>
         </div>
@@ -2746,6 +2891,20 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 });
 
 init();
+
+// "/" shortcut focuses the game search input
+document.addEventListener('keydown', e => {
+  if (e.key !== '/') return;
+  const active = document.activeElement;
+  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+  const searchEl = document.getElementById('search-input');
+  if (!searchEl) return;
+  const gamesPage = document.getElementById('page-games');
+  if (!gamesPage?.classList.contains('active')) return;
+  e.preventDefault();
+  searchEl.focus();
+  searchEl.select();
+});
 </script>
 </body>
 </html>
