@@ -714,8 +714,11 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         <div class="filter-row" id="owner-filters">
           <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Propriétaire :</span>
         </div>
-        <div class="filter-row" id="cat-filters">
-          <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
+        <div class="filter-row" id="cat-filters" style="justify-content:space-between;">
+          <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
+            <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
+          </div>
+          <button id="btn-show-hidden" class="filter-chip" style="margin-left:auto;" onclick="toggleShowHidden()">🙈 Voir masqués</button>
         </div>
         <div class="card" style="padding: 0; overflow: hidden;">
           <table class="games-table" id="games-table">
@@ -1392,6 +1395,7 @@ let csvParsedData = [];
 let currentKeywords = [];
 let activeOwnerFilter = 'all';
 let activeCatFilter   = 'all';
+let showHiddenGames   = false;
 
 // ============================
 // INIT
@@ -2063,10 +2067,18 @@ function isGameVisible(game) {
 function renderGamesTable() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
   let games = state.games.filter(isGameVisible);
+  if (!showHiddenGames) games = games.filter(g => !g.hidden);
   if (q) games = games.filter(g => g.name.toLowerCase().includes(q));
   if (activeOwnerFilter !== 'all') games = games.filter(g => normalizeOwner(g.owner).includes(activeOwnerFilter));
   if (activeCatFilter === 'none') games = games.filter(g => !g.catId);
   else if (activeCatFilter !== 'all') games = games.filter(g => g.catId === activeCatFilter);
+
+  const btn = document.getElementById('btn-show-hidden');
+  if (btn) {
+    const hiddenCount = state.games.filter(isGameVisible).filter(g => g.hidden).length;
+    btn.textContent = showHiddenGames ? '👁️ Masquer les exclus' : `🙈 Voir exclus (${hiddenCount})`;
+    btn.classList.toggle('active', showHiddenGames);
+  }
 
   const tbody = document.getElementById('games-tbody');
   const empty = document.getElementById('games-empty');
@@ -2077,19 +2089,37 @@ function renderGamesTable() {
   }
   empty.style.display = 'none';
   tbody.innerHTML = games.map(g => `
-    <tr>
-      <td class="game-name">${escHtml(g.name)}</td>
+    <tr style="${g.hidden ? 'opacity:0.45;' : ''}">
+      <td class="game-name">${escHtml(g.name)}${g.hidden ? ' <span style="font-size:0.65rem;color:var(--muted);font-weight:600;">exclu</span>' : ''}</td>
       <td>${ownerBadgeHtml(g.owner)}</td>
       <td>${catChipHtml(g.catId)}</td>
       <td style="color:var(--muted);font-size:0.8rem;">${escHtml(g.players || '—')}</td>
       <td>
         <div class="game-actions">
+          <button class="btn btn-ghost btn-sm" title="${g.hidden ? 'Réintégrer aux soirées' : 'Exclure des soirées'}" onclick="toggleGameHidden(${g.id})">${g.hidden ? '👁️' : '🙈'}</button>
           <button class="btn btn-ghost btn-sm" onclick="editGame(${g.id})">✏️</button>
           <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id})">✕</button>
         </div>
       </td>
     </tr>
   `).join('');
+}
+
+function toggleShowHidden() {
+  showHiddenGames = !showHiddenGames;
+  renderGamesTable();
+}
+
+async function toggleGameHidden(id) {
+  const g = state.games.find(x => x.id === id);
+  if (!g) return;
+  g.hidden = !g.hidden;
+  if (notion && g.notionId) {
+    try { await notion.update(g.notionId, g, getCatById(g.catId)?.name || ''); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+  save();
+  renderGamesTable();
 }
 
 function renderCatGrid() {
@@ -2250,8 +2280,10 @@ function renderOwnerFilters() {
 function renderCatFilters() {
   const row = document.getElementById('cat-filters');
   if (!row) return;
-  row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
-    <button class="filter-chip cat-chip ${activeCatFilter === 'all' ? 'active' : ''}" onclick="setCatFilter('all',this)">Toutes</button>
+  const inner = row.querySelector('div') || row;
+  inner.innerHTML = `
+    <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
+    <button class="filter-chip cat-chip ${activeCatFilter === 'all'  ? 'active' : ''}" onclick="setCatFilter('all',this)">Toutes</button>
     <button class="filter-chip cat-chip ${activeCatFilter === 'none' ? 'active' : ''}" onclick="setCatFilter('none',this)">Non catégorisé</button>
     ${state.categories.map(c => `<button class="filter-chip cat-chip ${activeCatFilter === c.id ? 'active' : ''}" onclick="setCatFilter(${c.id},this)">${c.emoji} ${escHtml(c.name)}</button>`).join('')}
   `;
