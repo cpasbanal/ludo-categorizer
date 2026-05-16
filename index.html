@@ -35,10 +35,6 @@
   --muted:    #6B896B;
 
   /* Owner colours */
-  --col-J:    #1565C0;
-  --col-M:    #F26522;
-  --col-FR:   #2E7D32;
-  --col-JM:   #7B1FA2;
 
   --r:    10px;
   --r-sm:  6px;
@@ -302,10 +298,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   font-size: 0.72rem; font-weight: 700;
   white-space: nowrap; font-family: var(--font-head);
 }
-.owner-J  { background: #E3F2FD; color: var(--col-J);  border: 1px solid #BBDEFB; }
-.owner-M  { background: #FFF3E0; color: var(--col-M);  border: 1px solid #FFCCBC; }
-.owner-FR { background: var(--green-light); color: var(--col-FR); border: 1px solid var(--green-muted); }
-.owner-JM { background: #F3E5F5; color: var(--col-JM); border: 1px solid #E1BEE7; }
+/* owner colors injected dynamically via injectOwnerStyles() */
 
 /* ===== CAT CHIP ===== */
 .cat-chip {
@@ -585,9 +578,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 }
 .owner-check:hover { border-color: var(--green-mid); color: var(--text); }
 .owner-check input { display: none; }
-.owner-check.sel-J  { background: #E3F2FD; color: var(--col-J);  border-color: #BBDEFB; }
-.owner-check.sel-M  { background: #FFF3E0; color: var(--col-M);  border-color: #FFCCBC; }
-.owner-check.sel-FR { background: var(--green-light); color: var(--col-FR); border-color: var(--green-muted); }
+/* sel-* classes injected dynamically via injectOwnerStyles() */
 </style>
 </head>
 <body>
@@ -779,21 +770,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             </div>
             <div>
               <label>Propriétaire par défaut (si absent)</label>
-              <select id="notion-default-owner">
-                <option value="J">Joueur 1</option>
-                <option value="M">Joueur 2</option>
-                <option value="FR">Familles Rurales</option>
-                              </select>
+              <select id="notion-default-owner"></select>
             </div>
           </div>
           <div class="form-row">
             <div>
               <label>Filtrer uniquement les propriétaires</label>
-              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-J" checked> <span style="color:var(--col-J);">Joueur 1</span></label>
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-M" checked> <span style="color:var(--col-M);">Joueur 2</span></label>
-                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="filter-FR" checked> <span style="color:var(--col-FR);">Familles Rurales</span></label>
-              </div>
+              <div id="import-owner-filters" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;"></div>
             </div>
           </div>
           <button class="btn btn-primary" onclick="importFromNotion()" id="btn-notion-import">
@@ -844,11 +827,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="form-row">
             <div>
               <label>Propriétaire(s) pour cette liste</label>
-              <div class="owner-checks" id="text-owner">
-                <label class="owner-check" onclick="toggleOwnerCheck(this,'J')"><input type="checkbox" value="J"> 👤 Joueur 1</label>
-                <label class="owner-check" onclick="toggleOwnerCheck(this,'M')"><input type="checkbox" value="M"> 👤 Joueur 2</label>
-                <label class="owner-check" onclick="toggleOwnerCheck(this,'FR')"><input type="checkbox" value="FR"> 🏠 Familles Rurales</label>
-              </div>
+              <div class="owner-checks" id="text-owner"></div>
             </div>
           </div>
           <div class="form-row">
@@ -941,9 +920,29 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             </div>
           </div>
           <div class="notion-info" style="margin-top:8px;margin-bottom:0;">
-            <strong>Valeurs attendues pour Propriétaire :</strong> <code>J</code> (Joueur 1), <code>M</code> (Joueur 2), <code>FR</code> (Familles Rurales)<br>
+            Les valeurs attendues pour le champ Propriétaire correspondent aux codes définis ci-dessous.<br>
             En multi-sélection, un jeu peut avoir plusieurs propriétaires simultanément.
           </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">👥</span> Propriétaires</div>
+          <div id="owners-settings-list"></div>
+          <div class="form-row form-row-3" style="margin-top:14px;">
+            <div>
+              <label>Icône</label>
+              <input type="text" id="new-owner-icon" placeholder="👤" maxlength="4" style="text-align:center;font-size:1.1rem;">
+            </div>
+            <div>
+              <label>Code <span style="font-weight:400;color:var(--muted);">(ex: AB)</span></label>
+              <input type="text" id="new-owner-key" placeholder="AB" maxlength="6">
+            </div>
+            <div>
+              <label>Nom affiché</label>
+              <input type="text" id="new-owner-label" placeholder="Nom du propriétaire">
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="margin-top:10px;" onclick="addOwner()">+ Ajouter un propriétaire</button>
         </div>
 
       </div>
@@ -971,11 +970,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div class="form-row">
       <div>
         <label>Propriétaire(s) *</label>
-        <div class="owner-checks" id="game-owner-input">
-          <label class="owner-check" onclick="toggleOwnerCheck(this,'J')"><input type="checkbox" value="J"> 👤 Joueur 1</label>
-          <label class="owner-check" onclick="toggleOwnerCheck(this,'M')"><input type="checkbox" value="M"> 👤 Joueur 2</label>
-          <label class="owner-check" onclick="toggleOwnerCheck(this,'FR')"><input type="checkbox" value="FR"> 🏠 Familles Rurales</label>
-        </div>
+        <div class="owner-checks" id="game-owner-input"></div>
       </div>
     </div>
     <div class="form-row">
@@ -1055,11 +1050,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div class="form-row">
       <div>
         <label>Propriétaire(s)</label>
-        <div class="owner-checks" id="edit-owner-input">
-          <label class="owner-check" onclick="toggleOwnerCheck(this,'J')"><input type="checkbox" value="J"> 👤 Joueur 1</label>
-          <label class="owner-check" onclick="toggleOwnerCheck(this,'M')"><input type="checkbox" value="M"> 👤 Joueur 2</label>
-          <label class="owner-check" onclick="toggleOwnerCheck(this,'FR')"><input type="checkbox" value="FR"> 🏠 Familles Rurales</label>
-        </div>
+        <div class="owner-checks" id="edit-owner-input"></div>
       </div>
     </div>
     <div class="form-row form-row-2">
@@ -1230,16 +1221,58 @@ let state = {
   nextCatId: 1,
 };
 
-const OWNERS = {
-  J:  { label: 'Joueur 1',         cls: 'owner-J',  icon: '👤' },
-  M:  { label: 'Joueur 2',         cls: 'owner-M',  icon: '👤' },
-  FR: { label: 'Familles Rurales', cls: 'owner-FR', icon: '🏠' },
-};
+const OWNER_PALETTE = [
+  { color: '#1565C0', bg: '#E3F2FD', border: '#BBDEFB' },
+  { color: '#E65100', bg: '#FFF3E0', border: '#FFCC80' },
+  { color: '#2E7D32', bg: '#E8F5E9', border: '#A5D6A7' },
+  { color: '#7B1FA2', bg: '#F3E5F5', border: '#E1BEE7' },
+  { color: '#C62828', bg: '#FFEBEE', border: '#FFCDD2' },
+  { color: '#00695C', bg: '#E0F2F1', border: '#80CBC4' },
+];
+const DEFAULT_OWNERS = [
+  { key: 'J',  label: 'Joueur 1',         icon: '👤' },
+  { key: 'M',  label: 'Joueur 2',         icon: '👤' },
+  { key: 'FR', label: 'Familles Rurales', icon: '🏠' },
+];
+let ownersList = [...DEFAULT_OWNERS];
+
+function ownerPalette(idx) { return OWNER_PALETTE[idx % OWNER_PALETTE.length]; }
+function isValidOwner(key) { return ownersList.some(o => o.key === key); }
+function getOwnerData(key) {
+  const i = ownersList.findIndex(o => o.key === key);
+  if (i < 0) return null;
+  return { ...ownersList[i], ...ownerPalette(i) };
+}
+function saveOwners() { localStorage.setItem('ludo_owners', JSON.stringify(ownersList)); }
+function loadOwners() {
+  try {
+    const stored = JSON.parse(localStorage.getItem('ludo_owners'));
+    ownersList = stored?.length ? stored : [...DEFAULT_OWNERS];
+  } catch(_) { ownersList = [...DEFAULT_OWNERS]; }
+}
+function injectOwnerStyles() {
+  const css = ownersList.map((o, i) => {
+    const c = ownerPalette(i);
+    return `.owner-${o.key}{background:${c.bg};color:${c.color};border:1px solid ${c.border}}` +
+           `.owner-check.sel-${o.key}{background:${c.bg};color:${c.color};border-color:${c.border}}`;
+  }).join('');
+  let s = document.getElementById('dynamic-owner-styles');
+  if (!s) { s = document.createElement('style'); s.id = 'dynamic-owner-styles'; document.head.appendChild(s); }
+  s.textContent = css;
+}
+function renderOwnerChecks(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = ownersList.map(o =>
+    `<label class="owner-check" onclick="toggleOwnerCheck(this,'${o.key}')">` +
+    `<input type="checkbox" value="${o.key}"> ${o.icon} ${o.label}</label>`
+  ).join('');
+}
 
 function normalizeOwner(owner) {
-  if (Array.isArray(owner)) return owner.filter(o => OWNERS[o] || o === 'JM');
-  if (owner === 'JM') return ['J', 'M'];
-  return OWNERS[owner] ? [owner] : ['J'];
+  if (Array.isArray(owner)) return owner.filter(o => isValidOwner(o) || o === 'JM');
+  if (owner === 'JM') return ['J', 'M'].filter(isValidOwner);
+  return isValidOwner(owner) ? [owner] : (ownersList.length ? [ownersList[0].key] : []);
 }
 
 const DEFAULT_CATEGORIES = [
@@ -1266,8 +1299,11 @@ let activeOwnerFilter = 'all';
 // ============================
 async function init() {
   migrateOldData();
+  loadOwners();
   loadSettings();
   loadCategories();
+  injectOwnerStyles();
+  ['game-owner-input', 'edit-owner-input', 'text-owner'].forEach(renderOwnerChecks);
   if (settings.notionToken && settings.notionDbId) {
     notion = new NotionAPI(settings.notionToken, settings.notionDbId, buildMapping());
     await syncBidirectional();
@@ -1276,6 +1312,8 @@ async function init() {
   }
   populateCategorySelects();
   renderOwnerFilters();
+  renderImportOwnerFilters();
+  renderOwnersSettings();
   renderDashboard();
   renderGamesTable();
   renderCatGrid();
@@ -1410,11 +1448,11 @@ function notionPagesToGames(pages) {
     const ownerProp = props[m.propProprietaire];
     let owners = [];
     if (ownerProp?.type === 'multi_select') {
-      owners = ownerProp.multi_select.map(o => o.name).filter(o => OWNERS[o]);
+      owners = ownerProp.multi_select.map(o => o.name).filter(o => isValidOwner(o));
       if (!owners.length) return null;
     } else if (ownerProp?.type === 'select') {
       const v = ownerProp.select?.name || '';
-      owners = normalizeOwner(v).filter(o => OWNERS[o]);
+      owners = normalizeOwner(v).filter(o => isValidOwner(o));
       if (!owners.length) return null;
     } else {
       owners = ['J'];
@@ -1626,12 +1664,11 @@ function detectCategory(gameName) {
 }
 
 function getCatById(id) { return state.categories.find(c => c.id === id); }
-function getOwner(key) { return OWNERS[key] || { label: key, cls: 'owner-J', icon: '👤' }; }
 
 function ownerBadgeHtml(owner) {
   return normalizeOwner(owner).map(k => {
-    const o = OWNERS[k] || { label: k, cls: 'owner-J', icon: '👤' };
-    return `<span class="owner-badge ${o.cls}">${o.icon} ${o.label}</span>`;
+    const o = getOwnerData(k);
+    return `<span class="owner-badge owner-${k}">${o ? o.icon : '👤'} ${o ? o.label : k}</span>`;
   }).join(' ');
 }
 
@@ -1647,14 +1684,14 @@ function catChipHtml(catId) {
 function toggleOwnerCheck(label, key) {
   const cb = label.querySelector('input');
   cb.checked = !cb.checked;
-  ['J','M','FR'].forEach(k => label.classList.remove('sel-' + k));
+  ownersList.forEach(o => label.classList.remove('sel-' + o.key));
   if (cb.checked) label.classList.add('sel-' + key);
 }
 
 function getSelectedOwners(containerId) {
   const checks = document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`);
   const vals = Array.from(checks).map(c => c.value);
-  return vals.length ? vals : ['J'];
+  return vals.length ? vals : (ownersList.length ? [ownersList[0].key] : []);
 }
 
 function setOwnerChecks(containerId, owners) {
@@ -1663,7 +1700,7 @@ function setOwnerChecks(containerId, owners) {
     const cb = label.querySelector('input');
     const key = cb.value;
     cb.checked = arr.includes(key);
-    ['J','M','FR'].forEach(k => label.classList.remove('sel-' + k));
+    ownersList.forEach(o => label.classList.remove('sel-' + o.key));
     if (cb.checked) label.classList.add('sel-' + key);
   });
 }
@@ -1676,7 +1713,8 @@ function openAddGame() {
   document.getElementById('game-players-input').value = '';
   document.getElementById('game-duration-input').value = '';
   document.getElementById('auto-cat-preview').style.display = 'none';
-  setOwnerChecks('game-owner-input', ['J']);
+  renderOwnerChecks('game-owner-input');
+  setOwnerChecks('game-owner-input', ownersList.length ? [ownersList[0].key] : []);
   document.getElementById('modal-add-game').classList.add('open');
   document.getElementById('game-name-input').focus();
 }
@@ -1736,6 +1774,7 @@ function editGame(id) {
   if (!g) return;
   document.getElementById('edit-game-id').value = id;
   document.getElementById('edit-game-name').value = g.name;
+  renderOwnerChecks('edit-owner-input');
   setOwnerChecks('edit-owner-input', g.owner);
   populateSelect('edit-game-cat',
     [{ value: '', label: '— Non catégorisé —' }, ...state.categories.map(c => ({ value: c.id, label: c.emoji + ' ' + c.name }))],
@@ -1938,7 +1977,7 @@ function renderDashboard() {
   const total = state.games.length;
   const catCount = state.categories.length;
   const ownerCounts = {};
-  Object.keys(OWNERS).forEach(k => ownerCounts[k] = 0);
+  ownersList.forEach(o => ownerCounts[o.key] = 0);
   state.games.forEach(g => { normalizeOwner(g.owner).forEach(k => { if (k in ownerCounts) ownerCounts[k]++; }); });
   const uncategorized = state.games.filter(g => !g.catId).length;
 
@@ -1977,11 +2016,11 @@ function renderDashboard() {
       </div>
     `).join('');
 
-  document.getElementById('dash-owners').innerHTML = Object.entries(OWNERS).map(([k, o]) => {
-    const count = ownerCounts[k] || 0;
+  document.getElementById('dash-owners').innerHTML = ownersList.map(o => {
+    const count = ownerCounts[o.key] || 0;
     return `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        ${ownerBadgeHtml(k)}
+        ${ownerBadgeHtml(o.key)}
         <div style="flex:1;"><div class="progress-bar" style="margin:0;"><div class="progress-fill" style="width:${total?Math.round(count/total*100):0}%"></div></div></div>
         <div style="font-size:0.75rem;color:var(--muted);min-width:20px;font-weight:700;">${count}</div>
       </div>
@@ -1993,7 +2032,7 @@ function renderOwnerFilters() {
   const row = document.getElementById('owner-filters');
   row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Filtrer :</span>
     <button class="filter-chip active" onclick="setOwnerFilter('all',this)">Tous</button>
-    ${Object.entries(OWNERS).map(([k,o]) => `<button class="filter-chip" onclick="setOwnerFilter('${k}',this)">${o.icon} ${o.label}</button>`).join('')}
+    ${ownersList.map(o => `<button class="filter-chip" onclick="setOwnerFilter('${o.key}',this)">${o.icon} ${o.label}</button>`).join('')}
   `;
 }
 
@@ -2010,6 +2049,80 @@ function updateSidebarStats() {
 }
 
 // ============================
+// OWNER MANAGEMENT
+// ============================
+function renderOwnersSettings() {
+  const el = document.getElementById('owners-settings-list');
+  if (!el) return;
+  if (!ownersList.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Aucun propriétaire.</p>';
+    return;
+  }
+  el.innerHTML = ownersList.map((o, i) => {
+    const c = ownerPalette(i);
+    const canDelete = ownersList.length > 1;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:1.2rem;width:26px;text-align:center;">${o.icon}</span>
+      <span style="font-weight:700;font-family:monospace;background:${c.bg};color:${c.color};border:1px solid ${c.border};border-radius:5px;padding:1px 8px;">${o.key}</span>
+      <span style="flex:1;">${o.label}</span>
+      ${canDelete ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.75rem;color:var(--danger);" onclick="removeOwner('${o.key}')">✕</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function addOwner() {
+  const icon  = document.getElementById('new-owner-icon').value.trim() || '👤';
+  const key   = document.getElementById('new-owner-key').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const label = document.getElementById('new-owner-label').value.trim();
+  if (!key)   { toast('Code requis', 'warn'); return; }
+  if (!label) { toast('Nom requis', 'warn'); return; }
+  if (ownersList.find(o => o.key === key)) { toast('Ce code existe déjà', 'warn'); return; }
+  ownersList.push({ key, label, icon });
+  saveOwners();
+  refreshOwnerUI();
+  document.getElementById('new-owner-icon').value  = '';
+  document.getElementById('new-owner-key').value   = '';
+  document.getElementById('new-owner-label').value = '';
+  toast(`"${label}" ajouté`, 'success');
+}
+
+function removeOwner(key) {
+  if (ownersList.length <= 1) { toast('Au moins un propriétaire requis', 'warn'); return; }
+  const inUse = state.games.filter(g => normalizeOwner(g.owner).includes(key)).length;
+  if (inUse && !confirm(`${inUse} jeu(x) ont ce propriétaire. Supprimer quand même ?`)) return;
+  ownersList = ownersList.filter(o => o.key !== key);
+  saveOwners();
+  refreshOwnerUI();
+  toast('Propriétaire supprimé', 'info');
+}
+
+function refreshOwnerUI() {
+  injectOwnerStyles();
+  renderOwnersSettings();
+  renderOwnerFilters();
+  renderImportOwnerFilters();
+  ['game-owner-input', 'edit-owner-input', 'text-owner'].forEach(renderOwnerChecks);
+}
+
+function renderImportOwnerFilters() {
+  const filterEl = document.getElementById('import-owner-filters');
+  if (filterEl) {
+    filterEl.innerHTML = ownersList.map((o, i) => {
+      const c = ownerPalette(i);
+      return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;">` +
+        `<input type="checkbox" id="filter-${o.key}" checked> ` +
+        `<span style="color:${c.color};">${o.icon} ${o.label}</span></label>`;
+    }).join('');
+  }
+  const sel = document.getElementById('notion-default-owner');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = ownersList.map(o => `<option value="${o.key}">${o.icon} ${o.label}</option>`).join('');
+    if (ownersList.find(o => o.key === cur)) sel.value = cur;
+  }
+}
+
+// ============================
 // IMPORT: NOTION
 // ============================
 async function importFromNotion() {
@@ -2022,7 +2135,10 @@ async function importFromNotion() {
   if (!token) { toast('Entrez votre token Notion', 'warn'); return; }
   if (!dbId) { toast('Entrez l\'ID de la base', 'warn'); return; }
 
-  const filters = { J: document.getElementById('filter-J').checked, M: document.getElementById('filter-M').checked, FR: document.getElementById('filter-FR').checked };
+  const activeFilters = new Set(ownersList.map(o => o.key).filter(k => {
+    const cb = document.getElementById('filter-' + k);
+    return cb ? cb.checked : true;
+  }));
   const prog = document.getElementById('notion-progress');
   const progText = document.getElementById('notion-progress-text');
   const progBar = document.getElementById('notion-progress-bar');
@@ -2032,11 +2148,15 @@ async function importFromNotion() {
 
   try {
     const formattedId = dbId.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
-    const resp = await fetch(`https://api.notion.com/v1/databases/${formattedId}/query`, {
+    const notionUrl = `https://api.notion.com/v1/databases/${formattedId}/query`;
+    const fetchOpts = {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Notion-Version': '2022-06-28' },
       body: JSON.stringify({ page_size: 100 }),
-    });
+    };
+    let resp;
+    try { resp = await fetch(notionUrl, fetchOpts); }
+    catch(_) { resp = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(notionUrl)}`, fetchOpts); }
 
     progBar.style.width = '60%';
     progText.textContent = 'Traitement des données…';
@@ -2062,24 +2182,18 @@ async function importFromNotion() {
       if (ownerProp && props[ownerProp]) {
         const oprop = props[ownerProp];
         if (oprop.type === 'multi_select') {
-          const vals = oprop.multi_select.map(o => o.name).filter(o => OWNERS[o]);
+          const vals = oprop.multi_select.map(o => o.name).filter(o => isValidOwner(o));
           if (vals.length) owners = vals;
         } else {
           let rawOwner = '';
           if (oprop.type === 'select') rawOwner = oprop.select?.name || '';
           else if (oprop.type === 'rich_text') rawOwner = oprop.rich_text?.map(t=>t.plain_text).join('') || '';
-          if (OWNERS[rawOwner]) owners = [rawOwner];
-          else {
-            const low = rawOwner.toLowerCase();
-            if (low.includes('joueur 2') || low === 'j2') owners = ['M'];
-            else if (low.includes('familles') || low === 'fr') owners = ['FR'];
-            else if (low.includes('joueur 1') || low === 'j1') owners = ['J'];
-          }
+          if (isValidOwner(rawOwner)) owners = [rawOwner];
         }
       }
 
       // skip if none of the owners pass the filter
-      if (!owners.some(k => filters[k])) { skipped++; continue; }
+      if (!owners.some(k => activeFilters.has(k))) { skipped++; continue; }
       if (state.games.find(g => g.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
 
       state.games.push({ id: state.nextGameId++, name, owner: owners, catId: detectCategory(name), players: '', duration: '' });
