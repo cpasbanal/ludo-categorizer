@@ -1315,6 +1315,7 @@ class NotionAPI {
     if (catName && m.propCategorie) p[m.propCategorie] = { select: { name: catName } };
     if (m.propJoueurs) p[m.propJoueurs] = { rich_text: [{ text: { content: game.players  || '' } }] };
     if (m.propDuree)   p[m.propDuree]   = { rich_text: [{ text: { content: game.duration || '' } }] };
+    p['Exclure de la sélection'] = { checkbox: !!game.hidden };
     return p;
   }
 }
@@ -1582,7 +1583,7 @@ async function manualSync() {
 function notionPagesToGames(pages) {
   const m = notion?.m || buildMapping();
   let id = 1;
-  let skippedNoName = 0, skippedExcluded = 0, skippedNoOwner = 0;
+  let skippedNoName = 0, skippedNoOwner = 0;
 
   const games = pages.map(page => {
     const props = page.properties || {};
@@ -1598,8 +1599,8 @@ function notionPagesToGames(pages) {
     }
     if (!name) { skippedNoName++; return null; }
 
-    // Skip if excluded
-    if (props['Exclure de la sélection']?.checkbox === true) { skippedExcluded++; return null; }
+    // Read exclusion checkbox — keep the game but mark it hidden
+    const hidden = props['Exclure de la sélection']?.checkbox === true;
 
     // Owner: resolve by key or label — skip only if field exists but has no recognized values
     const ownerProp = props[m.propProprietaire];
@@ -1621,13 +1622,14 @@ function notionPagesToGames(pages) {
     const players  = m.propJoueurs ? (props[m.propJoueurs]?.rich_text || []).map(t => t.plain_text).join('') : '';
     const duration = m.propDuree   ? (props[m.propDuree]?.rich_text   || []).map(t => t.plain_text).join('') : '';
 
-    return { id: id++, name, owner: owners, catId, players, duration, notionId: page.id };
+    return { id: id++, name, owner: owners, catId, players, duration, hidden, notionId: page.id };
   }).filter(Boolean);
 
+  const hiddenCount = games.filter(g => g.hidden).length;
   dbg(`notionPagesToGames: ${pages.length} pages → ${games.length} jeux` +
-    (skippedNoName    ? `, ${skippedNoName} sans nom`         : '') +
-    (skippedExcluded  ? `, ${skippedExcluded} exclus`         : '') +
-    (skippedNoOwner   ? `, ${skippedNoOwner} sans propriétaire` : ''),
+    (skippedNoName  ? `, ${skippedNoName} sans nom`           : '') +
+    (skippedNoOwner ? `, ${skippedNoOwner} sans propriétaire` : '') +
+    (hiddenCount    ? `, ${hiddenCount} exclus (masqués)`     : ''),
     games.length ? 'ok' : 'warn');
 
   return games;
