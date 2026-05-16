@@ -1831,10 +1831,12 @@ function detectCategory(gameName) {
 function getCatById(id) { return state.categories.find(c => c.id === id); }
 
 function ownerBadgeHtml(owner) {
-  return normalizeOwner(owner).map(k => {
-    const o = getOwnerData(k);
-    return `<span class="owner-badge owner-${k}">${o ? o.icon : '👤'} ${o ? o.label : k}</span>`;
-  }).join(' ');
+  return normalizeOwner(owner)
+    .filter(k => !getOwnerData(k)?.hidden)
+    .map(k => {
+      const o = getOwnerData(k);
+      return `<span class="owner-badge owner-${k}">${o ? o.icon : '👤'} ${o ? o.label : k}</span>`;
+    }).join(' ');
 }
 
 function catChipHtml(catId) {
