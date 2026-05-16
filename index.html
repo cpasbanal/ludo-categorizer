@@ -1402,16 +1402,19 @@ function notionPagesToGames(pages) {
     }
     if (!name) return null;
 
-    // Owner: handle both multi_select and select
+    // Skip if excluded
+    if (props['Exclure de la sélection']?.checkbox === true) return null;
+
+    // Owner: handle both multi_select and select — skip if empty
     const ownerProp = props[m.propProprietaire];
-    let owners = ['J'];
+    let owners = [];
     if (ownerProp?.type === 'multi_select') {
       owners = ownerProp.multi_select.map(o => o.name).filter(o => OWNERS[o]);
-      if (!owners.length) owners = ['J'];
     } else if (ownerProp?.type === 'select') {
       const v = ownerProp.select?.name || '';
-      owners = normalizeOwner(v);
+      owners = normalizeOwner(v).filter(o => OWNERS[o]);
     }
+    if (!owners.length) return null;
 
     const catName = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
     const cat     = state.categories.find(c => c.name === catName);
