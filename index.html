@@ -879,6 +879,14 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             <button class="btn btn-primary" onclick="saveSettingsAndSync()">💾 Sauvegarder &amp; Synchroniser</button>
             <button class="btn btn-danger" onclick="clearNotionSettings()">Déconnecter</button>
           </div>
+          <details style="margin-top:16px;">
+            <summary style="cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--muted);user-select:none;">🐛 Journal de débogage</summary>
+            <div style="margin-top:8px;display:flex;gap:6px;">
+              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="runFullDiagnostic()">▶ Lancer diagnostic</button>
+              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearDebugLog()">✕ Effacer</button>
+            </div>
+            <pre id="debug-log" style="margin-top:8px;padding:10px;background:#1a1a2e;color:#a8ff78;border-radius:6px;font-size:0.72rem;line-height:1.6;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;"></pre>
+          </details>
         </div>
 
         <div class="card">
@@ -1102,6 +1110,70 @@ function buildMapping() {
 }
 
 // ============================
+// DEBUG LOG
+// ============================
+const debugLines = [];
+function dbg(msg, level = 'info') {
+  const ts = new Date().toTimeString().slice(0,8);
+  const prefix = level === 'error' ? '❌' : level === 'warn' ? '⚠️' : level === 'ok' ? '✅' : '•';
+  const line = `[${ts}] ${prefix} ${msg}`;
+  debugLines.push(line);
+  if (debugLines.length > 200) debugLines.shift();
+  console.log('[DBG]', msg);
+  const el = document.getElementById('debug-log');
+  if (el) { el.textContent = debugLines.join('\n'); el.scrollTop = el.scrollHeight; }
+}
+function clearDebugLog() {
+  debugLines.length = 0;
+  const el = document.getElementById('debug-log');
+  if (el) el.textContent = '';
+}
+async function runFullDiagnostic() {
+  clearDebugLog();
+  const token = document.getElementById('settings-token').value.trim();
+  const dbId  = document.getElementById('settings-dbid').value.trim();
+  dbg(`Token : ${token ? token.slice(0,14) + '…' : '(vide)'}`);
+  dbg(`DB ID brut : "${dbId}" (${dbId.length} chars)`);
+  if (!token || !dbId) { dbg('Token ou DB ID manquant — arrêt', 'error'); return; }
+
+  const api = new NotionAPI(token, dbId);
+  dbg(`DB ID formaté : ${api.dbId}`);
+  dbg('Test accès direct à api.notion.com…');
+  const directUrl = `https://api.notion.com/v1/databases/${api.dbId}`;
+  try {
+    const r = await fetch(directUrl, { headers: api.h });
+    dbg(`Direct → HTTP ${r.status}`, r.ok ? 'ok' : 'warn');
+    if (!r.ok) { const t = await r.text(); dbg('Réponse : ' + t.slice(0, 300), 'warn'); }
+  } catch(e) {
+    dbg(`Direct → erreur réseau : ${e.message}`, 'warn');
+    dbg('Test via corsproxy.io…');
+    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(directUrl)}`;
+    try {
+      const r2 = await fetch(proxyUrl, { headers: api.h });
+      dbg(`Proxy → HTTP ${r2.status}`, r2.ok ? 'ok' : 'warn');
+      if (!r2.ok) { const t = await r2.text(); dbg('Réponse proxy : ' + t.slice(0, 300), 'warn'); }
+      else {
+        const j = await r2.json();
+        const name = (j.title || []).map(t => t.plain_text).join('') || j.id;
+        dbg(`Base trouvée via proxy : "${name}"`, 'ok');
+        dbg('Test requête query via proxy…');
+        const qr = await fetch(`https://corsproxy.io/?url=${encodeURIComponent('https://api.notion.com/v1/databases/' + api.dbId + '/query')}`,
+          { method: 'POST', headers: api.h, body: JSON.stringify({ page_size: 3 }) });
+        dbg(`Query proxy → HTTP ${qr.status}`, qr.ok ? 'ok' : 'warn');
+        if (qr.ok) {
+          const qj = await qr.json();
+          dbg(`Pages retournées : ${qj.results?.length ?? 0} (has_more=${qj.has_more})`, 'ok');
+          if (qj.results?.length) {
+            const first = qj.results[0];
+            dbg(`Propriétés de la 1ère page : ${Object.keys(first.properties || {}).join(', ')}`);
+          }
+        } else { const t = await qr.text(); dbg('Erreur query : ' + t.slice(0, 300), 'error'); }
+      }
+    } catch(e2) { dbg(`Proxy → erreur réseau : ${e2.message}`, 'error'); }
+  }
+}
+
+// ============================
 // NOTION API
 // ============================
 class NotionAPI {
@@ -1124,28 +1196,24 @@ class NotionAPI {
     const base = _viaProxy
       ? `https://corsproxy.io/?url=${encodeURIComponent('https://api.notion.com/v1' + path)}`
       : `https://api.notion.com/v1${path}`;
-    console.log(`[Notion] ${opts.method || 'GET'} ${base}${_viaProxy ? ' (proxy)' : ''}`);
+    dbg(`${opts.method || 'GET'} ${path}${_viaProxy ? ' (proxy)' : ''}`);
     let r;
     try {
       r = await fetch(base, { headers: this.h, ...opts });
     } catch(networkErr) {
-      console.error('[Notion] Network/CORS error:', networkErr);
+      dbg(`Erreur réseau : ${networkErr.message}`, 'warn');
       if (!_viaProxy) {
-        console.warn('[Notion] Direct call failed, retrying via CORS proxy…');
+        dbg('Passage via corsproxy.io…');
         return this._req(path, opts, true);
       }
-      throw new Error(
-        `Erreur réseau : ${networkErr.message}\n` +
-        `• Testez en navigation privée (extensions désactivées)\n` +
-        `• Vérifiez qu'un pare-feu ne bloque pas api.notion.com`
-      );
+      throw new Error(`Erreur réseau (proxy) : ${networkErr.message}`);
     }
-    console.log(`[Notion] HTTP ${r.status} ${r.statusText}`);
+    dbg(`HTTP ${r.status} ${r.statusText}${_viaProxy ? ' (proxy)' : ''}`, r.ok ? 'ok' : 'error');
     if (!r.ok) {
       const text = await r.text().catch(() => '');
       let body = {};
       try { body = JSON.parse(text); } catch(_) {}
-      console.error('[Notion] Error response:', text);
+      dbg('Réponse erreur : ' + text.slice(0, 200), 'error');
       const parts = [
         `HTTP ${r.status}`,
         body.code    ? `code=${body.code}` : null,
@@ -1153,7 +1221,6 @@ class NotionAPI {
       ].filter(Boolean);
       throw new Error(parts.join(' — '));
     }
-    if (_viaProxy) console.log('[Notion] Proxy request succeeded');
     return r.json();
   }
 
@@ -1351,6 +1418,7 @@ function saveCategories() {
 // ============================
 async function syncBidirectional() {
   showLoading(true);
+  dbg('syncBidirectional() démarré');
   try {
     const notionPages = await notion.queryAll();
     const notionGames = notionPagesToGames(notionPages);
@@ -1384,10 +1452,11 @@ async function syncBidirectional() {
     saveGamesLocal();
     connStatus = 'ok';
     const msg = `Sync OK : ${notionGames.length} depuis Notion` + (pushed ? `, ${pushed} envoyé(s)` : '');
+    dbg(msg, 'ok');
     toast(msg, 'success');
   } catch(e) {
     connStatus = 'error';
-    console.error('[Notion] sync failed:', e);
+    dbg('syncBidirectional échoué : ' + e.message, 'error');
     toast('Erreur sync : ' + e.message, 'warn');
     loadGamesLocal();
   } finally {
@@ -1398,16 +1467,20 @@ async function syncBidirectional() {
 
 async function refreshFromNotion() {
   showLoading(true);
+  dbg('refreshFromNotion() démarré');
   try {
     const pages = await notion.queryAll();
-    state.games = notionPagesToGames(pages);
+    dbg(`${pages.length} pages reçues depuis Notion`);
+    const games = notionPagesToGames(pages);
+    dbg(`${games.length} jeux après filtrage (owner vide / exclus)`, 'ok');
+    state.games = games;
     state.nextGameId = state.games.length ? Math.max(...state.games.map(g => g.id)) + 1 : 1;
     saveGamesLocal();
     connStatus = 'ok';
     toast('Base locale mise à jour depuis Notion', 'success');
   } catch(e) {
     connStatus = 'error';
-    console.error('[Notion] refresh failed:', e);
+    dbg('refreshFromNotion échoué : ' + e.message, 'error');
     toast('Erreur : ' + e.message, 'warn');
   } finally {
     showLoading(false);
