@@ -2244,12 +2244,13 @@ async function catDrop(e, catId) {
 }
 
 function renderDashboard() {
-  const total = state.games.length;
+  const visibleGames = state.games.filter(isGameVisible).filter(g => !g.hidden);
+  const total = visibleGames.length;
   const catCount = state.categories.length;
   const ownerCounts = {};
   ownersList.forEach(o => ownerCounts[o.key] = 0);
-  state.games.filter(isGameVisible).forEach(g => { normalizeOwner(g.owner).forEach(k => { if (k in ownerCounts) ownerCounts[k]++; }); });
-  const uncategorized = state.games.filter(g => !g.catId).length;
+  visibleGames.forEach(g => { normalizeOwner(g.owner).forEach(k => { if (k in ownerCounts) ownerCounts[k]++; }); });
+  const uncategorized = visibleGames.filter(g => !g.catId).length;
 
   document.getElementById('dashboard-stats').innerHTML = `
     <div class="dash-stat">
@@ -2274,7 +2275,7 @@ function renderDashboard() {
     </div>
   `;
 
-  const catData = state.categories.map(c => ({ name: c.emoji + ' ' + c.name, count: state.games.filter(g => g.catId === c.id).length }))
+  const catData = state.categories.map(c => ({ name: c.emoji + ' ' + c.name, count: visibleGames.filter(g => g.catId === c.id).length }))
     .sort((a,b) => b.count - a.count).slice(0,8);
   document.getElementById('dash-cats').innerHTML = catData.length === 0
     ? '<div class="empty-state" style="padding:24px"><div class="empty-state-sub">Aucune catégorie</div></div>'
@@ -2286,7 +2287,7 @@ function renderDashboard() {
       </div>
     `).join('');
 
-  document.getElementById('dash-owners').innerHTML = ownersList.map(o => {
+  document.getElementById('dash-owners').innerHTML = ownersList.filter(o => !o.hidden).map(o => {
     const count = ownerCounts[o.key] || 0;
     return `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
