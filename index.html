@@ -370,6 +370,32 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 }
 .cat-card-new:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
 
+/* ===== AVATAR PICKER ===== */
+.avatar-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 6px; font-size: 1.4rem;
+  border: 1.5px solid var(--border2); border-radius: var(--r-xs);
+  background: var(--surface2); cursor: pointer; transition: border-color 0.15s;
+}
+.avatar-btn:hover { border-color: var(--green-mid); }
+.avatar-picker {
+  position: absolute; z-index: 200;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r); box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  padding: 10px; width: 260px;
+}
+.avatar-picker-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;
+}
+.avatar-option {
+  font-size: 1.2rem; padding: 5px; text-align: center; cursor: pointer;
+  border-radius: 6px; transition: background 0.1s;
+}
+.avatar-option:hover { background: var(--green-light); }
+.avatar-option.selected { background: var(--green-light); outline: 2px solid var(--green-mid); }
+.avatar-picker-section { font-size: 0.65rem; color: var(--muted); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 3px; padding: 0 2px; }
+
 /* ===== MODAL ===== */
 .modal-overlay {
   position: fixed; inset: 0;
@@ -942,9 +968,12 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="card-title"><span class="icon">👥</span> Propriétaires</div>
           <div id="owners-settings-list"></div>
           <div class="form-row form-row-3" style="margin-top:14px;">
-            <div>
+            <div style="position:relative;">
               <label>Icône</label>
-              <input type="text" id="new-owner-icon" placeholder="👤" maxlength="4" style="text-align:center;font-size:1.1rem;">
+              <button type="button" class="avatar-btn" id="new-owner-avatar-btn" onclick="openAvatarPicker('new-owner-avatar-btn','new-owner-icon')" title="Choisir un avatar">
+                <span id="new-owner-icon-display">👤</span>
+              </button>
+              <input type="hidden" id="new-owner-icon" value="👤">
             </div>
             <div>
               <label>Code <span style="font-weight:400;color:var(--muted);">(ex: AB)</span></label>
@@ -2231,7 +2260,10 @@ function renderOwnersSettings() {
     const canDelete = ownersList.length > 1;
     const hiddenStyle = o.hidden ? 'opacity:0.45;text-decoration:line-through;' : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-      <span style="font-size:1.2rem;width:26px;text-align:center;${o.hidden ? 'opacity:0.4' : ''}">${o.icon}</span>
+      <button type="button" class="avatar-btn" style="width:36px;height:36px;flex-shrink:0;font-size:1.1rem;padding:0;" id="owner-avatar-btn-${o.key}" title="Changer l'avatar" onclick="openAvatarPicker('owner-avatar-btn-${o.key}','owner-icon-${o.key}')">
+        <span id="owner-icon-display-${o.key}">${o.icon}</span>
+      </button>
+      <input type="hidden" id="owner-icon-${o.key}" value="${o.icon}" onchange="applyOwnerIconChange('${o.key}')">
       <span style="font-weight:700;font-family:monospace;background:${c.bg};color:${c.color};border:1px solid ${c.border};border-radius:5px;padding:1px 8px;${hiddenStyle}">${o.key}</span>
       <span style="flex:1;${hiddenStyle}">${o.label}</span>
       <button class="btn btn-ghost" style="padding:2px 10px;font-size:0.75rem;${o.hidden ? 'opacity:0.6' : ''}" title="${o.hidden ? 'Afficher les jeux' : 'Masquer les jeux'}" onclick="toggleOwnerHidden('${o.key}')">
@@ -2254,19 +2286,29 @@ function toggleOwnerHidden(key) {
 }
 
 function addOwner() {
-  const icon  = document.getElementById('new-owner-icon').value.trim() || '👤';
+  const icon  = document.getElementById('new-owner-icon').value || '👤';
   const key   = document.getElementById('new-owner-key').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const label = document.getElementById('new-owner-label').value.trim();
   if (!key)   { toast('Code requis', 'warn'); return; }
   if (!label) { toast('Nom requis', 'warn'); return; }
   if (ownersList.find(o => o.key === key)) { toast('Ce code existe déjà', 'warn'); return; }
-  ownersList.push({ key, label, icon });
+  ownersList.push({ key, label, icon, hidden: false });
   saveOwners();
   refreshOwnerUI();
-  document.getElementById('new-owner-icon').value  = '';
+  document.getElementById('new-owner-icon').value = '👤';
+  document.getElementById('new-owner-icon-display').textContent = '👤';
   document.getElementById('new-owner-key').value   = '';
   document.getElementById('new-owner-label').value = '';
   toast(`"${label}" ajouté`, 'success');
+}
+
+function applyOwnerIconChange(key) {
+  const newIcon = document.getElementById(`owner-icon-${key}`)?.value || '👤';
+  const o = ownersList.find(x => x.key === key);
+  if (!o) return;
+  o.icon = newIcon;
+  saveOwners();
+  refreshOwnerUI();
 }
 
 function removeOwner(key) {
@@ -2277,6 +2319,84 @@ function removeOwner(key) {
   saveOwners();
   refreshOwnerUI();
   toast('Propriétaire supprimé', 'info');
+}
+
+// ============================
+// AVATAR PICKER
+// ============================
+const AVATAR_GROUPS = [
+  { label: 'Personnes', icons: ['👤','👥','🧑','👦','👧','👨','👩','🧒','👴','👵','🧔','🧑‍🦱','🧑‍🦰','🧑‍🦳','🧑‍🦲','🙋','🙆','🧑‍🤝‍🧑'] },
+  { label: 'Jeux',      icons: ['🎲','🎮','🃏','♟️','🎯','🏆','🥇','🎪','🎭','🎨','🎵','🎸'] },
+  { label: 'Animaux',   icons: ['🦁','🐯','🐻','🦊','🐺','🐼','🐨','🐸','🐧','🦅','🦋','🐉'] },
+  { label: 'Lieux',     icons: ['🏠','🏡','🏢','🏫','⛺','🌍','🌈','🌊','🌻','🌸','🌙','⭐'] },
+];
+
+let _avatarTarget = null; // { btnId, inputId }
+
+function openAvatarPicker(btnId, inputId) {
+  closeAvatarPicker();
+  _avatarTarget = { btnId, inputId };
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  const currentVal = document.getElementById(inputId)?.value || '';
+
+  const picker = document.createElement('div');
+  picker.className = 'avatar-picker';
+  picker.id = 'avatar-picker-popup';
+
+  picker.innerHTML = AVATAR_GROUPS.map(g => `
+    <div class="avatar-picker-section">${g.label}</div>
+    <div class="avatar-picker-grid">
+      ${g.icons.map(ic => `<span class="avatar-option${ic === currentVal ? ' selected' : ''}" onclick="pickAvatar('${ic}')">${ic}</span>`).join('')}
+    </div>
+  `).join('');
+
+  btn.parentElement.style.position = 'relative';
+  btn.parentElement.appendChild(picker);
+
+  // Position below the button
+  picker.style.top = (btn.offsetTop + btn.offsetHeight + 4) + 'px';
+  picker.style.left = '0';
+
+  setTimeout(() => document.addEventListener('click', _avatarClickOutside, { once: true, capture: true }), 0);
+}
+
+function _avatarClickOutside(e) {
+  const picker = document.getElementById('avatar-picker-popup');
+  if (picker && !picker.contains(e.target)) {
+    closeAvatarPicker();
+  } else if (picker) {
+    // clicked inside — let it run, then re-attach if still open
+    setTimeout(() => {
+      if (document.getElementById('avatar-picker-popup')) {
+        document.addEventListener('click', _avatarClickOutside, { once: true, capture: true });
+      }
+    }, 0);
+  }
+}
+
+function closeAvatarPicker() {
+  const p = document.getElementById('avatar-picker-popup');
+  if (p) p.remove();
+  _avatarTarget = null;
+}
+
+function pickAvatar(icon) {
+  if (!_avatarTarget) return;
+  const { btnId, inputId } = _avatarTarget;
+  const input = document.getElementById(inputId);
+  if (input) {
+    input.value = icon;
+    input.dispatchEvent(new Event('change'));
+  }
+  // Update display span
+  const displayId = btnId.replace('-btn', '-display').replace('avatar-btn', 'icon-display');
+  const display = document.getElementById(displayId);
+  if (display) display.textContent = icon;
+  // Also update the button directly if display not found by pattern
+  const btn = document.getElementById(btnId);
+  if (btn) { const sp = btn.querySelector('span'); if (sp) sp.textContent = icon; }
+  closeAvatarPicker();
 }
 
 function refreshOwnerUI() {
