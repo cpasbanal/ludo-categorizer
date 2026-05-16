@@ -712,7 +712,10 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <input type="text" id="search-input" placeholder="Rechercher un jeu…" oninput="renderGamesTable()">
         </div>
         <div class="filter-row" id="owner-filters">
-          <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Filtrer :</span>
+          <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Propriétaire :</span>
+        </div>
+        <div class="filter-row" id="cat-filters">
+          <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
         </div>
         <div class="card" style="padding: 0; overflow: hidden;">
           <table class="games-table" id="games-table">
@@ -1388,6 +1391,7 @@ const DEFAULT_CATEGORIES = [
 let csvParsedData = [];
 let currentKeywords = [];
 let activeOwnerFilter = 'all';
+let activeCatFilter   = 'all';
 
 // ============================
 // INIT
@@ -1407,6 +1411,7 @@ async function init() {
   }
   populateCategorySelects();
   renderOwnerFilters();
+  renderCatFilters();
   renderImportOwnerFilters();
   renderOwnersSettings();
   renderDashboard();
@@ -2022,6 +2027,7 @@ function saveCategory() {
   });
   saveCategories();
   populateCategorySelects();
+  renderCatFilters();
   renderCatGrid();
   renderDashboard();
   updateSidebarStats();
@@ -2035,8 +2041,10 @@ function deleteCategory(id) {
   if (!confirm(`Supprimer la catégorie "${cat.name}" ?`)) return;
   state.categories = state.categories.filter(c => c.id !== id);
   state.games.forEach(g => { if (g.catId === id) g.catId = null; });
+  if (activeCatFilter === id) activeCatFilter = 'all';
   save();
   populateCategorySelects();
+  renderCatFilters();
   renderCatGrid();
   renderGamesTable();
   renderDashboard();
@@ -2057,6 +2065,8 @@ function renderGamesTable() {
   let games = state.games.filter(isGameVisible);
   if (q) games = games.filter(g => g.name.toLowerCase().includes(q));
   if (activeOwnerFilter !== 'all') games = games.filter(g => normalizeOwner(g.owner).includes(activeOwnerFilter));
+  if (activeCatFilter === 'none') games = games.filter(g => !g.catId);
+  else if (activeCatFilter !== 'all') games = games.filter(g => g.catId === activeCatFilter);
 
   const tbody = document.getElementById('games-tbody');
   const empty = document.getElementById('games-empty');
@@ -2227,15 +2237,36 @@ function renderDashboard() {
 
 function renderOwnerFilters() {
   const row = document.getElementById('owner-filters');
-  row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Filtrer :</span>
-    <button class="filter-chip active" onclick="setOwnerFilter('all',this)">Tous</button>
-    ${ownersList.map(o => `<button class="filter-chip" onclick="setOwnerFilter('${o.key}',this)">${o.icon} ${o.label}</button>`).join('')}
+  const visible = ownersList.filter(o => !o.hidden);
+  row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Propriétaire :</span>
+    <button class="filter-chip owner-chip ${activeOwnerFilter === 'all' ? 'active' : ''}" onclick="setOwnerFilter('all',this)">Tous</button>
+    ${visible.map(o => `<button class="filter-chip owner-chip ${activeOwnerFilter === o.key ? 'active' : ''}" onclick="setOwnerFilter('${o.key}',this)">${o.icon} ${o.label}</button>`).join('')}
+  `;
+  if (activeOwnerFilter !== 'all' && !visible.find(o => o.key === activeOwnerFilter)) {
+    activeOwnerFilter = 'all';
+  }
+}
+
+function renderCatFilters() {
+  const row = document.getElementById('cat-filters');
+  if (!row) return;
+  row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
+    <button class="filter-chip cat-chip ${activeCatFilter === 'all' ? 'active' : ''}" onclick="setCatFilter('all',this)">Toutes</button>
+    <button class="filter-chip cat-chip ${activeCatFilter === 'none' ? 'active' : ''}" onclick="setCatFilter('none',this)">Non catégorisé</button>
+    ${state.categories.map(c => `<button class="filter-chip cat-chip ${activeCatFilter === c.id ? 'active' : ''}" onclick="setCatFilter(${c.id},this)">${c.emoji} ${escHtml(c.name)}</button>`).join('')}
   `;
 }
 
 function setOwnerFilter(val, el) {
   activeOwnerFilter = val;
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.filter-chip.owner-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderGamesTable();
+}
+
+function setCatFilter(val, el) {
+  activeCatFilter = val;
+  document.querySelectorAll('.filter-chip.cat-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   renderGamesTable();
 }
