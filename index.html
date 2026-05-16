@@ -702,7 +702,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
         <div class="topbar-actions">
           <button class="btn btn-secondary" id="btn-sync" onclick="manualSync()" style="display:none">⟳ Sync Notion</button>
-          <button class="btn btn-secondary" onclick="recategorizeAll()">↻ Recatégoriser</button>
+          <button class="btn btn-secondary" onclick="openRecatModal()">↻ Recatégoriser</button>
           <button class="btn btn-primary" onclick="openAddGame()">+ Ajouter</button>
         </div>
       </div>
@@ -750,7 +750,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="page-title">Catégories</div>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-secondary" onclick="recategorizeAll()">↻ Recatégoriser</button>
+          <button class="btn btn-secondary" onclick="openRecatModal()">↻ Recatégoriser</button>
           <button class="btn btn-primary" onclick="openAddCategory()">+ Nouvelle</button>
         </div>
       </div>
@@ -1003,6 +1003,23 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 <div id="loading-overlay" class="loading-overlay" style="display:none;">
   <div class="loading-spinner"></div>
   <div class="loading-text">Synchronisation avec Notion…</div>
+</div>
+
+<!-- MODAL: RECATEGORIZE -->
+<div class="modal-overlay" id="modal-recat">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">↻ Recatégoriser</div>
+    <p id="recat-summary" style="font-size:0.85rem;color:var(--text-med);margin-bottom:16px;line-height:1.6;"></p>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r-xs);font-size:0.85rem;font-weight:600;">
+      <input type="checkbox" id="recat-force" style="width:16px;height:16px;cursor:pointer;">
+      Forcer la recatégorisation de tous les jeux
+      <span style="font-weight:400;color:var(--muted);font-size:0.78rem;display:block;margin-top:2px;">(écrase les catégories existantes)</span>
+    </label>
+    <div class="modal-footer" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-recat')">Annuler</button>
+      <button class="btn btn-primary" onclick="runRecategorize()">↻ Recatégoriser</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: ADD GAME -->
@@ -1971,17 +1988,31 @@ async function deleteGame(id) {
   toast(`"${g.name}" supprimé`, 'info');
 }
 
-function recategorizeAll() {
+function openRecatModal() {
+  const uncategorized = state.games.filter(g => !g.catId).length;
+  const total = state.games.length;
+  document.getElementById('recat-summary').innerHTML =
+    `<strong>${uncategorized}</strong> jeu${uncategorized > 1 ? 'x' : ''} non catégorisé${uncategorized > 1 ? 's' : ''} sur ${total}.<br>` +
+    `Par défaut, seuls les jeux sans catégorie seront traités.`;
+  document.getElementById('recat-force').checked = false;
+  document.getElementById('modal-recat').classList.add('open');
+}
+
+function runRecategorize() {
+  const force = document.getElementById('recat-force').checked;
   let count = 0;
   state.games.forEach(g => {
+    if (!force && g.catId) return;
     const newCat = detectCategory(g.name);
     if (newCat && newCat !== g.catId) { g.catId = newCat; count++; }
   });
   save();
+  closeModal('modal-recat');
   renderGamesTable();
+  renderCatFilters();
   renderCatGrid();
   renderDashboard();
-  toast(`${count} jeu(x) recatégorisé(s)`, 'success');
+  toast(`${count} jeu${count > 1 ? 'x' : ''} recatégorisé${count > 1 ? 's' : ''}`, 'success');
 }
 
 // ============================
