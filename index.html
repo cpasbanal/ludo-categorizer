@@ -1284,9 +1284,9 @@ const OWNER_PALETTE = [
   { color: '#00695C', bg: '#E0F2F1', border: '#80CBC4' },
 ];
 const DEFAULT_OWNERS = [
-  { key: 'J',  label: 'Joueur 1',         icon: '👤' },
-  { key: 'M',  label: 'Joueur 2',         icon: '👤' },
-  { key: 'FR', label: 'Familles Rurales', icon: '🏠' },
+  { key: 'J',  label: 'Joueur 1',         icon: '👤', hidden: false },
+  { key: 'M',  label: 'Joueur 2',         icon: '👤', hidden: false },
+  { key: 'FR', label: 'Familles Rurales', icon: '🏠', hidden: false },
 ];
 let ownersList = [...DEFAULT_OWNERS];
 
@@ -1414,6 +1414,7 @@ async function syncBidirectional() {
   showLoading(true);
   dbg('syncBidirectional() démarré');
   try {
+    await syncOwnersFromNotion();
     const notionPages = await notion.queryAll();
     const notionGames = notionPagesToGames(notionPages);
 
@@ -1459,10 +1460,37 @@ async function syncBidirectional() {
   }
 }
 
+async function syncOwnersFromNotion() {
+  if (!notion || notion.m.ownerType !== 'multi_select') return;
+  try {
+    const db = await notion._req(`/databases/${notion.dbId}`);
+    const prop = db.properties?.[notion.m.propProprietaire];
+    if (prop?.type !== 'multi_select') return;
+    const options = prop.multi_select.options || [];
+    let added = 0;
+    for (const opt of options) {
+      if (!resolveOwnerKey(opt.name)) {
+        ownersList.push({ key: opt.name, label: opt.name, icon: '👤', hidden: false });
+        added++;
+      }
+    }
+    if (added) {
+      saveOwners();
+      refreshOwnerUI();
+      dbg(`${added} nouveau(x) propriétaire(s) importé(s) depuis Notion`, 'ok');
+    } else {
+      dbg('Propriétaires Notion déjà synchronisés', 'ok');
+    }
+  } catch(e) {
+    dbg('Sync propriétaires Notion ignoré : ' + e.message, 'warn');
+  }
+}
+
 async function refreshFromNotion() {
   showLoading(true);
   dbg('refreshFromNotion() démarré');
   try {
+    await syncOwnersFromNotion();
     const pages = await notion.queryAll();
     dbg(`${pages.length} pages reçues depuis Notion`);
     const games = notionPagesToGames(pages);
@@ -1985,9 +2013,14 @@ function deleteCategory(id) {
 // ============================
 // RENDER
 // ============================
+function isGameVisible(game) {
+  const owners = normalizeOwner(game.owner);
+  return owners.some(k => !getOwnerData(k)?.hidden);
+}
+
 function renderGamesTable() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-  let games = state.games;
+  let games = state.games.filter(isGameVisible);
   if (q) games = games.filter(g => g.name.toLowerCase().includes(q));
   if (activeOwnerFilter !== 'all') games = games.filter(g => normalizeOwner(g.owner).includes(activeOwnerFilter));
 
@@ -2018,7 +2051,7 @@ function renderGamesTable() {
 function renderCatGrid() {
   const grid = document.getElementById('cat-grid');
   const catCards = state.categories.map(cat => {
-    const games = state.games.filter(g => g.catId === cat.id);
+    const games = state.games.filter(g => g.catId === cat.id && isGameVisible(g));
     return `
       <div class="cat-card">
         <div class="cat-card-header">
@@ -2055,7 +2088,7 @@ function renderDashboard() {
   const catCount = state.categories.length;
   const ownerCounts = {};
   ownersList.forEach(o => ownerCounts[o.key] = 0);
-  state.games.forEach(g => { normalizeOwner(g.owner).forEach(k => { if (k in ownerCounts) ownerCounts[k]++; }); });
+  state.games.filter(isGameVisible).forEach(g => { normalizeOwner(g.owner).forEach(k => { if (k in ownerCounts) ownerCounts[k]++; }); });
   const uncategorized = state.games.filter(g => !g.catId).length;
 
   document.getElementById('dashboard-stats').innerHTML = `
@@ -2138,13 +2171,28 @@ function renderOwnersSettings() {
   el.innerHTML = ownersList.map((o, i) => {
     const c = ownerPalette(i);
     const canDelete = ownersList.length > 1;
+    const hiddenStyle = o.hidden ? 'opacity:0.45;text-decoration:line-through;' : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-      <span style="font-size:1.2rem;width:26px;text-align:center;">${o.icon}</span>
-      <span style="font-weight:700;font-family:monospace;background:${c.bg};color:${c.color};border:1px solid ${c.border};border-radius:5px;padding:1px 8px;">${o.key}</span>
-      <span style="flex:1;">${o.label}</span>
+      <span style="font-size:1.2rem;width:26px;text-align:center;${o.hidden ? 'opacity:0.4' : ''}">${o.icon}</span>
+      <span style="font-weight:700;font-family:monospace;background:${c.bg};color:${c.color};border:1px solid ${c.border};border-radius:5px;padding:1px 8px;${hiddenStyle}">${o.key}</span>
+      <span style="flex:1;${hiddenStyle}">${o.label}</span>
+      <button class="btn btn-ghost" style="padding:2px 10px;font-size:0.75rem;${o.hidden ? 'opacity:0.6' : ''}" title="${o.hidden ? 'Afficher les jeux' : 'Masquer les jeux'}" onclick="toggleOwnerHidden('${o.key}')">
+        ${o.hidden ? '🙈 Masqué' : '👁️ Visible'}
+      </button>
       ${canDelete ? `<button class="btn btn-ghost" style="padding:2px 8px;font-size:0.75rem;color:var(--danger);" onclick="removeOwner('${o.key}')">✕</button>` : ''}
     </div>`;
   }).join('');
+}
+
+function toggleOwnerHidden(key) {
+  const o = ownersList.find(x => x.key === key);
+  if (!o) return;
+  o.hidden = !o.hidden;
+  saveOwners();
+  renderOwnersSettings();
+  renderGamesTable();
+  renderCatGrid();
+  renderDashboard();
 }
 
 function addOwner() {
