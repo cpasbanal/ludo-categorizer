@@ -997,9 +997,8 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
               <select id="settings-or-model" onchange="saveAISettings()">
                 <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash — Google</option>
                 <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B — Meta</option>
-                <option value="deepseek/deepseek-r1:free">DeepSeek R1 — DeepSeek</option>
-                <option value="deepseek/deepseek-chat-v3-0324:free">DeepSeek V3 — DeepSeek</option>
-                <option value="qwen/qwq-32b:free">QwQ 32B — Qwen</option>
+                <option value="deepseek/deepseek-chat:free">DeepSeek V3 — DeepSeek</option>
+                <option value="qwen/qwen-2.5-72b-instruct:free">Qwen 2.5 72B — Alibaba</option>
                 <option value="mistralai/mistral-7b-instruct:free">Mistral 7B — Mistral</option>
               </select>
             </div>
@@ -2143,7 +2142,10 @@ Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
     });
     if (!res.ok) {
       const err = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status} — ${err.slice(0, 120)}`);
+      let msg = `HTTP ${res.status}`;
+      try { const body = JSON.parse(err); msg = body?.error?.message || msg; } catch(_) {}
+      if (res.status === 404) msg += ' — Modèle indisponible, changez le modèle dans les Paramètres';
+      throw new Error(msg);
     }
     raw = await res.json();
   } catch(e) {
