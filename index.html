@@ -317,6 +317,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase;
   padding: 0 14px 10px; border-bottom: 2px solid var(--border);
 }
+.games-table th.sortable {
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+.games-table th.sortable:hover { color: var(--green-dark); }
+.games-table th.sort-active { color: var(--green-dark); }
+.sort-icon { display: inline-block; margin-left: 4px; font-style: normal; font-size: 0.7rem; opacity: 0.45; }
+.sort-active .sort-icon { opacity: 1; }
 .games-table td {
   padding: 11px 14px; font-size: 0.86rem;
   border-bottom: 1px solid var(--border); vertical-align: middle;
@@ -723,12 +730,12 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
         <div class="card" style="padding: 0; overflow: hidden;">
           <table class="games-table" id="games-table">
-            <thead>
+            <thead id="games-thead">
               <tr>
-                <th>Nom du jeu</th>
-                <th>Propriétaire</th>
-                <th>Catégorie</th>
-                <th>Joueurs</th>
+                <th class="sortable" onclick="setSort('name')">Nom du jeu <i class="sort-icon">↕</i></th>
+                <th class="sortable" onclick="setSort('owner')">Propriétaire <i class="sort-icon">↕</i></th>
+                <th class="sortable" onclick="setSort('cat')">Catégorie <i class="sort-icon">↕</i></th>
+                <th class="sortable" onclick="setSort('players')">Joueurs <i class="sort-icon">↕</i></th>
                 <th></th>
               </tr>
             </thead>
@@ -1433,6 +1440,8 @@ let currentKeywords = [];
 let activeOwnerFilter = 'all';
 let activeCatFilter   = 'all';
 let showHiddenGames   = false;
+let sortField = 'name';
+let sortDir   = 'asc';
 
 // ============================
 // INIT
@@ -2243,6 +2252,12 @@ function isGameVisible(game) {
   return owners.some(k => !getOwnerData(k)?.hidden);
 }
 
+function setSort(field) {
+  if (sortField === field) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortField = field; sortDir = 'asc'; }
+  renderGamesTable();
+}
+
 function renderGamesTable() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
   let games = state.games.filter(isGameVisible);
@@ -2251,6 +2266,35 @@ function renderGamesTable() {
   if (activeOwnerFilter !== 'all') games = games.filter(g => normalizeOwner(g.owner).includes(activeOwnerFilter));
   if (activeCatFilter === 'none') games = games.filter(g => !g.catId);
   else if (activeCatFilter !== 'all') games = games.filter(g => g.catId === activeCatFilter);
+
+  // Sort
+  games = [...games].sort((a, b) => {
+    let va, vb;
+    if (sortField === 'name') {
+      va = a.name.toLowerCase(); vb = b.name.toLowerCase();
+    } else if (sortField === 'owner') {
+      va = normalizeOwner(a.owner).map(k => getOwnerData(k)?.label || k).join(',').toLowerCase();
+      vb = normalizeOwner(b.owner).map(k => getOwnerData(k)?.label || k).join(',').toLowerCase();
+    } else if (sortField === 'cat') {
+      va = (getCatById(a.catId)?.name || '').toLowerCase();
+      vb = (getCatById(b.catId)?.name || '').toLowerCase();
+    } else if (sortField === 'players') {
+      va = parseFloat((a.players || '0').replace(/[^0-9.]/g, '')) || 0;
+      vb = parseFloat((b.players || '0').replace(/[^0-9.]/g, '')) || 0;
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  // Update header icons
+  const FIELDS = ['name', 'owner', 'cat', 'players'];
+  document.querySelectorAll('#games-thead th.sortable').forEach((th, i) => {
+    const f = FIELDS[i];
+    const icon = th.querySelector('.sort-icon');
+    th.classList.toggle('sort-active', f === sortField);
+    if (icon) icon.textContent = f !== sortField ? '↕' : sortDir === 'asc' ? '↑' : '↓';
+  });
 
   const btn = document.getElementById('btn-show-hidden');
   if (btn) {
