@@ -1006,14 +1006,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           </div>
           <div class="form-row">
             <div>
-              <label>Modèle IA <span style="font-weight:400;color:var(--muted);">(tous gratuits)</span></label>
+              <label>Modèle IA <span style="font-weight:400;color:var(--muted);">(tous gratuits)</span>
+                <button type="button" onclick="loadFreeModels(true)" id="btn-load-models" style="margin-left:8px;font-size:0.72rem;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-family:inherit;">⟳ Actualiser</button>
+              </label>
               <select id="settings-or-model" onchange="saveAISettings()">
-                <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B — Meta</option>
-                <option value="deepseek/deepseek-chat:free">DeepSeek V3 — DeepSeek</option>
-                <option value="google/gemma-3-27b-it:free">Gemma 3 27B — Google</option>
-                <option value="qwen/qwen3-8b:free">Qwen3 8B — Alibaba</option>
-                <option value="mistralai/mistral-7b-instruct:free">Mistral 7B — Mistral</option>
+                <option value="">— Cliquez sur Actualiser pour charger —</option>
               </select>
+              <div id="models-status" style="font-size:0.75rem;color:var(--muted);margin-top:4px;"></div>
             </div>
           </div>
           <p style="font-size:0.78rem;color:var(--muted);margin-top:6px;">
@@ -1816,6 +1815,7 @@ function renderSettingsPage() {
   if (logEl) { logEl.textContent = debugLines.join('\n'); logEl.scrollTop = logEl.scrollHeight; }
   const aiLogEl = document.getElementById('ai-log');
   if (aiLogEl && aiLogLines.length) { aiLogEl.textContent = aiLogLines.join('\n'); aiLogEl.scrollTop = aiLogEl.scrollHeight; }
+  if (settings.openrouterApiKey) loadFreeModels(false);
 }
 
 async function testNotionConnection() {
@@ -1853,6 +1853,80 @@ function saveAISettings() {
   persistSettings();
   const aiBtn = document.getElementById('btn-recat-ai');
   if (aiBtn) aiBtn.style.display = settings.openrouterApiKey ? '' : 'none';
+}
+
+async function loadFreeModels(forceRefresh = false) {
+  const key = settings.openrouterApiKey || document.getElementById('settings-claude-key')?.value.trim();
+  const statusEl = document.getElementById('models-status');
+  const selectEl = document.getElementById('settings-or-model');
+  if (!selectEl) return;
+
+  if (!key) {
+    if (statusEl) statusEl.textContent = 'Entrez votre clé API pour charger les modèles.';
+    return;
+  }
+
+  const CACHE_KEY = 'ludo_or_models';
+  const CACHE_TTL = 24 * 60 * 60 * 1000;
+  const btnEl = document.getElementById('btn-load-models');
+
+  // Try cache first
+  if (!forceRefresh) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && Date.now() - cached.ts < CACHE_TTL && Array.isArray(cached.models)) {
+        _populateModelSelect(selectEl, cached.models);
+        const ageMin = Math.round((Date.now() - cached.ts) / 60000);
+        if (statusEl) statusEl.textContent = `${cached.models.length} modèles gratuits — cache de ${ageMin} min`;
+        return;
+      }
+    } catch(e) {}
+  }
+
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
+  if (statusEl) statusEl.textContent = 'Chargement…';
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const freeModels = (data.data || [])
+      .filter(m => m.id && m.id.endsWith(':free'))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), models: freeModels }));
+    _populateModelSelect(selectEl, freeModels);
+    if (statusEl) statusEl.textContent = `${freeModels.length} modèles gratuits chargés`;
+  } catch(e) {
+    if (statusEl) statusEl.textContent = `Erreur : ${e.message}`;
+  } finally {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '⟳ Actualiser'; }
+  }
+}
+
+function _populateModelSelect(selectEl, models) {
+  const current = settings.openrouterModel || selectEl.value;
+  selectEl.innerHTML = '';
+  if (!models.length) {
+    selectEl.innerHTML = '<option value="">— Aucun modèle gratuit trouvé —</option>';
+    return;
+  }
+  for (const m of models) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.id;
+    selectEl.appendChild(opt);
+  }
+  // Restore saved selection, fallback to first
+  if (current && models.some(m => m.id === current)) {
+    selectEl.value = current;
+  } else {
+    selectEl.value = models[0].id;
+    settings.openrouterModel = models[0].id;
+    persistSettings();
+  }
 }
 
 async function saveSettingsAndSync() {
