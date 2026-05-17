@@ -925,7 +925,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             <button class="btn btn-primary" onclick="saveSettingsAndSync()">💾 Sauvegarder &amp; Synchroniser</button>
             <button class="btn btn-danger" onclick="clearNotionSettings()">Déconnecter</button>
           </div>
-          <details style="margin-top:16px;">
+          <details id="debug-details" style="margin-top:16px;" open>
             <summary style="cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--muted);user-select:none;">🐛 Journal de débogage</summary>
             <div style="margin-top:8px;display:flex;gap:6px;">
               <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="runFullDiagnostic()">▶ Lancer diagnostic</button>
@@ -1757,6 +1757,8 @@ function renderSettingsPage() {
   const st = document.getElementById('settings-status');
   st.textContent = '';
   st.className   = 'settings-status';
+  const logEl = document.getElementById('debug-log');
+  if (logEl) { logEl.textContent = debugLines.join('\n'); logEl.scrollTop = logEl.scrollHeight; }
 }
 
 async function testNotionConnection() {
@@ -2087,17 +2089,23 @@ function runRecategorize() {
 // AI AUTO-CATEGORIZATION
 // ============================
 async function runAICategorize() {
+  dbg('runAICategorize démarré');
   if (!settings.openrouterApiKey) {
+    dbg('Clé API manquante', 'error');
     toast('Ajoutez votre clé API OpenRouter dans les Paramètres', 'warn');
     return;
   }
+  dbg(`Clé API : ${settings.openrouterApiKey.slice(0, 12)}… | Modèle : ${settings.openrouterModel}`);
   if (!state.categories.length) {
+    dbg('Aucune catégorie définie', 'error');
     toast('Créez au moins une catégorie avant de lancer l\'IA', 'warn');
     return;
   }
   const force = document.getElementById('recat-force').checked;
   const targets = state.games.filter(g => force || !g.catId);
+  dbg(`Jeux cibles : ${targets.length} (force=${force})`);
   if (!targets.length) {
+    dbg('Aucun jeu à traiter', 'warn');
     toast('Aucun jeu à catégoriser', 'info');
     return;
   }
