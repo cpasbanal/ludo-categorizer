@@ -2105,23 +2105,29 @@ async function runAICategorize() {
   closeModal('modal-recat');
   toast(`✨ Envoi de ${targets.length} jeux à l'IA…`, 'info');
 
+  // Normalize text for robust matching (remove accents, lowercase, trim)
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+  // Use numeric keys so AI can't mangle game names
   const catList = state.categories
     .map(c => `- "${c.name}" (${c.emoji}${c.desc ? ': ' + c.desc : ''})`)
     .join('\n');
-  const gameList = targets.map(g => g.name).join('\n');
+  const indexedGames = targets.map((g, i) => `${i + 1}. ${g.name}`).join('\n');
 
-  const prompt = `Tu es un assistant de ludothèque. Catégorise chaque jeu de société dans l'une des catégories ci-dessous.
+  const prompt = `Tu es un assistant de ludothèque. Catégorise chaque jeu de société numéroté dans l'une des catégories ci-dessous.
 
 Catégories disponibles :
 ${catList}
 
-Jeux à catégoriser (un par ligne) :
-${gameList}
+Jeux à catégoriser :
+${indexedGames}
 
 Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, de la forme :
-{"NomDuJeu": "NomDeLaCatégorie", ...}
+{"1": "NomDeLaCatégorie", "2": "NomDeLaCatégorie", ...}
 
-Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
+Utilise le numéro du jeu comme clé. Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
+
+  dbg(`IA prompt (${targets.length} jeux, ${state.categories.length} catégories)`);
 
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://openrouter.ai/api/v1/chat/completions')}`;
   let raw;
@@ -2155,25 +2161,33 @@ Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
   }
 
   const text = raw?.choices?.[0]?.message?.content || '';
-  dbg('IA réponse : ' + text.slice(0, 200));
+  dbg('IA réponse brute : ' + text.slice(0, 400));
 
   let mapping = {};
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Pas de JSON dans la réponse');
     mapping = JSON.parse(jsonMatch[0]);
+    dbg(`Mapping parsé : ${Object.keys(mapping).length} entrées`);
   } catch(e) {
     toast('Impossible de lire la réponse de l\'IA', 'error');
-    dbg('Parse erreur : ' + e.message, 'error');
+    dbg('Parse erreur : ' + e.message + ' | texte : ' + text.slice(0, 100), 'error');
     return;
   }
 
+  // Build normalized category lookup
+  const catByNorm = {};
+  state.categories.forEach(c => { catByNorm[norm(c.name)] = c; });
+
   let count = 0;
-  for (const game of targets) {
-    const catName = mapping[game.name];
-    if (!catName) continue;
-    const cat = state.categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
-    if (cat && game.catId !== cat.id) { game.catId = cat.id; count++; }
+  for (let i = 0; i < targets.length; i++) {
+    const game = targets[i];
+    const catName = mapping[String(i + 1)];
+    if (!catName) { dbg(`  [${i+1}] ${game.name} → non catégorisé`); continue; }
+    const cat = catByNorm[norm(catName)];
+    if (!cat) { dbg(`  [${i+1}] ${game.name} → catégorie inconnue : "${catName}"`, 'warn'); continue; }
+    if (game.catId !== cat.id) { game.catId = cat.id; count++; }
+    dbg(`  [${i+1}] ${game.name} → ${cat.name}`, 'ok');
   }
 
   save();
