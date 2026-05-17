@@ -2178,11 +2178,23 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
 
   aiDbg(`Envoi requête → ${targets.length} jeux, ${cats.length} catégories`);
 
-  // OpenRouter natively supports browser CORS — no proxy needed
-  const model = settings.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free';
-  aiDbg(`POST https://openrouter.ai/api/v1/chat/completions | model: ${model}`);
-  let raw;
-  try {
+  // Ordered fallback list — try next model on 429/provider error
+  const FREE_MODELS = [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-chat:free',
+    'google/gemma-3-27b-it:free',
+    'qwen/qwen3-8b:free',
+    'mistralai/mistral-7b-instruct:free',
+  ];
+  const preferredModel = settings.openrouterModel || FREE_MODELS[0];
+  const startIdx = FREE_MODELS.indexOf(preferredModel);
+  // Build attempt order: preferred first, then the rest in sequence
+  const attemptOrder = startIdx >= 0
+    ? [FREE_MODELS[startIdx], ...FREE_MODELS.filter((_, i) => i !== startIdx)]
+    : [preferredModel, ...FREE_MODELS];
+
+  const callOpenRouter = async (model) => {
+    aiDbg(`POST openrouter.ai | model: ${model}`);
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -2191,25 +2203,39 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
         'HTTP-Referer': window.location.href,
         'X-Title': 'Ludo-Categorizer',
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
-      }),
+      body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }),
     });
-    aiDbg(`HTTP ${res.status} ${res.statusText}`, res.ok ? 'ok' : 'error');
+    aiDbg(`HTTP ${res.status} ${res.statusText}`, res.ok ? 'ok' : 'warn');
     if (!res.ok) {
-      const err = await res.text().catch(() => '');
+      const errText = await res.text().catch(() => '');
       let msg = `HTTP ${res.status}`;
-      try { const body = JSON.parse(err); msg = body?.error?.message || msg; } catch(_) {}
-      if (res.status === 404) msg += ' — Modèle indisponible, changez le modèle dans les Paramètres';
-      if (res.status === 401) msg = 'Clé API invalide ou expirée';
+      try { const b = JSON.parse(errText); msg = b?.error?.message || msg; } catch(_) {}
+      if (res.status === 401) throw new Error('AUTH:' + msg);
       throw new Error(msg);
     }
-    raw = await res.json();
+    return res.json();
+  };
+
+  let raw;
+  try {
+    let lastErr;
+    for (let i = 0; i < attemptOrder.length; i++) {
+      const model = attemptOrder[i];
+      try {
+        raw = await callOpenRouter(model);
+        if (i > 0) aiDbg(`Basculé sur : ${model}`, 'ok');
+        break;
+      } catch(e) {
+        lastErr = e;
+        if (e.message.startsWith('AUTH:')) throw new Error(e.message.slice(5)); // don't retry on bad key
+        aiDbg(`Échec ${model} : ${e.message}`, 'warn');
+        if (i < attemptOrder.length - 1) aiDbg(`Essai du modèle suivant…`);
+      }
+    }
+    if (!raw) throw lastErr;
   } catch(e) {
     toast('Erreur IA : ' + e.message, 'error');
-    aiDbg('Erreur : ' + e.message, 'error');
+    aiDbg('Tous les modèles ont échoué : ' + e.message, 'error');
     return;
   }
 
