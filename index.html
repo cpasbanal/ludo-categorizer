@@ -1564,6 +1564,7 @@ async function init() {
   renderCatGrid();
   updateSidebarStats();
   updateConnDot();
+  showPage(localStorage.getItem('ludo_current_page') || 'dashboard');
 }
 
 function migrateOldData() {
@@ -2022,6 +2023,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-item').forEach(item => {
     if (item.getAttribute('onclick')?.includes(`'${id}'`)) item.classList.add('active');
   });
+  localStorage.setItem('ludo_current_page', id);
   closeSidebar();
   if (id === 'dashboard')  renderDashboard();
   if (id === 'games')      renderGamesTable();
