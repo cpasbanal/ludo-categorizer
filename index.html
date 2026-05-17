@@ -1006,6 +1006,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <p style="font-size:0.78rem;color:var(--muted);margin-top:6px;">
             La clé et le modèle sont stockés uniquement dans votre navigateur (localStorage).
           </p>
+          <div style="margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:0.8rem;font-weight:700;color:var(--muted);">📋 Journal des appels IA</span>
+              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearAILog()">✕ Effacer</button>
+            </div>
+            <pre id="ai-log" style="padding:10px;background:#1a1a2e;color:#a8ff78;border-radius:6px;font-size:0.72rem;line-height:1.6;height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;">En attente d'un appel IA…</pre>
+          </div>
         </div>
 
         <div class="card">
@@ -1224,6 +1231,23 @@ function dbg(msg, level = 'info') {
 function clearDebugLog() {
   debugLines.length = 0;
   const el = document.getElementById('debug-log');
+  if (el) el.textContent = '';
+}
+
+const aiLogLines = [];
+function aiDbg(msg, level = 'info') {
+  const ts = new Date().toTimeString().slice(0,8);
+  const prefix = level === 'error' ? '❌' : level === 'warn' ? '⚠️' : level === 'ok' ? '✅' : '•';
+  const line = `[${ts}] ${prefix} ${msg}`;
+  aiLogLines.push(line);
+  if (aiLogLines.length > 300) aiLogLines.shift();
+  console.log('[AI]', msg);
+  const el = document.getElementById('ai-log');
+  if (el) { el.textContent = aiLogLines.join('\n'); el.scrollTop = el.scrollHeight; }
+}
+function clearAILog() {
+  aiLogLines.length = 0;
+  const el = document.getElementById('ai-log');
   if (el) el.textContent = '';
 }
 async function runFullDiagnostic() {
@@ -1759,6 +1783,8 @@ function renderSettingsPage() {
   st.className   = 'settings-status';
   const logEl = document.getElementById('debug-log');
   if (logEl) { logEl.textContent = debugLines.join('\n'); logEl.scrollTop = logEl.scrollHeight; }
+  const aiLogEl = document.getElementById('ai-log');
+  if (aiLogEl && aiLogLines.length) { aiLogEl.textContent = aiLogLines.join('\n'); aiLogEl.scrollTop = aiLogEl.scrollHeight; }
 }
 
 async function testNotionConnection() {
@@ -2089,23 +2115,23 @@ function runRecategorize() {
 // AI AUTO-CATEGORIZATION
 // ============================
 async function runAICategorize() {
-  dbg('runAICategorize démarré');
+  aiDbg('── Nouvelle catégorisation ──');
   if (!settings.openrouterApiKey) {
-    dbg('Clé API manquante', 'error');
+    aiDbg('Clé API manquante', 'error');
     toast('Ajoutez votre clé API OpenRouter dans les Paramètres', 'warn');
     return;
   }
-  dbg(`Clé API : ${settings.openrouterApiKey.slice(0, 12)}… | Modèle : ${settings.openrouterModel}`);
+  aiDbg(`Clé : ${settings.openrouterApiKey.slice(0, 12)}… | Modèle : ${settings.openrouterModel}`);
   if (!state.categories.length) {
-    dbg('Aucune catégorie définie', 'error');
+    aiDbg('Aucune catégorie définie', 'error');
     toast('Créez au moins une catégorie avant de lancer l\'IA', 'warn');
     return;
   }
   const force = document.getElementById('recat-force').checked;
   const targets = state.games.filter(g => force || !g.catId);
-  dbg(`Jeux cibles : ${targets.length} (force=${force})`);
+  aiDbg(`Jeux cibles : ${targets.length} | force=${force} | catégories : ${state.categories.length}`);
   if (!targets.length) {
-    dbg('Aucun jeu à traiter', 'warn');
+    aiDbg('Aucun jeu à traiter', 'warn');
     toast('Aucun jeu à catégoriser', 'info');
     return;
   }
@@ -2132,7 +2158,7 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après :
 Exemple : {"1": 3, "2": 1, "5": 2}
 Si un jeu ne correspond à aucune catégorie, omets-le.`;
 
-  dbg(`IA → ${targets.length} jeux, ${cats.length} catégories, modèle: ${settings.openrouterModel}`);
+  aiDbg(`Envoi requête → ${targets.length} jeux, ${cats.length} catégories`);
 
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://openrouter.ai/api/v1/chat/completions')}`;
   let raw;
@@ -2161,22 +2187,22 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
     raw = await res.json();
   } catch(e) {
     toast('Erreur IA : ' + e.message, 'error');
-    dbg('Erreur appel API : ' + e.message, 'error');
+    aiDbg('Erreur appel API : ' + e.message, 'error');
     return;
   }
 
   const text = raw?.choices?.[0]?.message?.content || '';
-  dbg('Réponse IA complète :\n' + text);
+  aiDbg('Réponse brute :\n' + text);
 
   let mapping = {};
   try {
     const jsonMatch = text.match(/\{[\s\S]*?\}/);
-    if (!jsonMatch) throw new Error('Aucun JSON trouvé');
+    if (!jsonMatch) throw new Error('Aucun JSON trouvé dans la réponse');
     mapping = JSON.parse(jsonMatch[0]);
-    dbg(`JSON parsé : ${Object.keys(mapping).length} entrées`);
+    aiDbg(`JSON parsé : ${Object.keys(mapping).length} entrées`, 'ok');
   } catch(e) {
-    toast('Réponse IA illisible — voir journal debug dans Paramètres', 'error');
-    dbg('Erreur parsing JSON : ' + e.message, 'error');
+    toast('Réponse IA illisible — voir journal IA dans Paramètres', 'error');
+    aiDbg('Erreur parsing JSON : ' + e.message, 'error');
     return;
   }
 
@@ -2184,18 +2210,22 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
   for (let i = 0; i < targets.length; i++) {
     const game = targets[i];
     const catIdx = parseInt(mapping[String(i + 1)]);
-    if (!catIdx || catIdx < 1 || catIdx > cats.length) continue;
+    if (!catIdx || catIdx < 1 || catIdx > cats.length) {
+      aiDbg(`  [${i+1}] ${game.name} → pas de catégorie assignée`);
+      continue;
+    }
     const cat = cats[catIdx - 1];
     if (game.catId !== cat.id) { game.catId = cat.id; count++; }
-    dbg(`  [${i+1}] ${game.name} → ${cat.name}`, 'ok');
+    aiDbg(`  [${i+1}] ${game.name} → ${cat.name}`, 'ok');
   }
 
   save();
   renderGamesTable(); renderCatFilters(); renderCatGrid(); renderDashboard();
+  aiDbg(`Résultat : ${count} jeu(x) catégorisé(s)`, count > 0 ? 'ok' : 'warn');
   if (count > 0) {
     toast(`✨ ${count} jeu${count > 1 ? 'x' : ''} catégorisé${count > 1 ? 's' : ''} par l'IA`, 'success');
   } else {
-    toast('IA : 0 jeux catégorisés — voir journal debug dans Paramètres', 'warn');
+    toast('IA : 0 jeux catégorisés — voir journal IA dans Paramètres', 'warn');
   }
 }
 
