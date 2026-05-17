@@ -1136,10 +1136,11 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   </div>
 </div>
 
-<!-- MODAL: ADD CATEGORY -->
+<!-- MODAL: ADD/EDIT CATEGORY -->
 <div class="modal-overlay" id="modal-add-category">
   <div class="modal">
-    <div class="modal-title">⊟ Créer une catégorie</div>
+    <input type="hidden" id="cat-edit-id">
+    <div class="modal-title" id="cat-modal-title">⊟ Créer une catégorie</div>
     <div class="form-row form-row-2">
       <div>
         <label>Nom de la catégorie *</label>
@@ -1168,7 +1169,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-add-category')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveCategory()">Créer la catégorie</button>
+      <button class="btn btn-primary" id="cat-modal-save-btn" onclick="saveCategory()">Créer la catégorie</button>
     </div>
   </div>
 </div>
@@ -2394,12 +2395,31 @@ JSON uniquement — {"numJeu": numCat, ...}`;
 // ADD CATEGORY
 // ============================
 function openAddCategory() {
+  document.getElementById('cat-edit-id').value = '';
+  document.getElementById('cat-modal-title').textContent = '⊟ Créer une catégorie';
+  document.getElementById('cat-modal-save-btn').textContent = 'Créer la catégorie';
   document.getElementById('cat-name-input').value = '';
   document.getElementById('cat-emoji-input').value = '🎲';
   document.getElementById('cat-emoji-icon-display').textContent = '🎲';
   document.getElementById('cat-desc-input').value = '';
   document.getElementById('cat-keyword-input').value = '';
   currentKeywords = [];
+  renderKeywordList();
+  document.getElementById('modal-add-category').classList.add('open');
+}
+
+function openEditCategory(id) {
+  const cat = getCatById(id);
+  if (!cat) return;
+  document.getElementById('cat-edit-id').value = id;
+  document.getElementById('cat-modal-title').textContent = '✏️ Modifier la catégorie';
+  document.getElementById('cat-modal-save-btn').textContent = 'Enregistrer';
+  document.getElementById('cat-name-input').value = cat.name;
+  document.getElementById('cat-emoji-input').value = cat.emoji || '🎲';
+  document.getElementById('cat-emoji-icon-display').textContent = cat.emoji || '🎲';
+  document.getElementById('cat-desc-input').value = cat.desc || '';
+  document.getElementById('cat-keyword-input').value = '';
+  currentKeywords = [...(cat.keywords || [])];
   renderKeywordList();
   document.getElementById('modal-add-category').classList.add('open');
 }
@@ -2428,42 +2448,42 @@ function renderKeywordList() {
 }
 
 function saveCategory() {
-  const name = document.getElementById('cat-name-input').value.trim();
+  const name  = document.getElementById('cat-name-input').value.trim();
   if (!name) { toast('Entrez un nom', 'warn'); return; }
-  addCategoryData({
-    name,
-    emoji: document.getElementById('cat-emoji-input').value.trim() || '🎲',
-    desc:  document.getElementById('cat-desc-input').value.trim(),
-    keywords: [...currentKeywords],
-  });
-  saveCategories();
-  populateCategorySelects();
-  renderCatFilters();
-  renderCatGrid();
-  renderDashboard();
-  updateSidebarStats();
-  closeModal('modal-add-category');
-  toast(`Catégorie "${name}" créée`, 'success');
+  const emoji    = document.getElementById('cat-emoji-input').value.trim() || '🎲';
+  const desc     = document.getElementById('cat-desc-input').value.trim();
+  const keywords = [...currentKeywords];
+  const editId   = parseInt(document.getElementById('cat-edit-id').value);
+
+  if (editId) {
+    const cat = getCatById(editId);
+    if (!cat) return;
+    if (state.categories.some(c => c.id !== editId && c.name.toLowerCase() === name.toLowerCase())) {
+      toast('Une catégorie avec ce nom existe déjà', 'warn'); return;
+    }
+    cat.name = name; cat.emoji = emoji; cat.desc = desc; cat.keywords = keywords;
+    saveCategories();
+    populateCategorySelects();
+    renderCatFilters();
+    renderCatGrid();
+    renderGamesTable();
+    renderDashboard();
+    updateSidebarStats();
+    closeModal('modal-add-category');
+    toast(`Catégorie "${name}" mise à jour`, 'success');
+  } else {
+    addCategoryData({ name, emoji, desc, keywords });
+    saveCategories();
+    populateCategorySelects();
+    renderCatFilters();
+    renderCatGrid();
+    renderDashboard();
+    updateSidebarStats();
+    closeModal('modal-add-category');
+    toast(`Catégorie "${name}" créée`, 'success');
+  }
 }
 
-function editCategoryName(id) {
-  const cat = getCatById(id);
-  if (!cat) return;
-  const newName = prompt(`Renommer la catégorie "${cat.name}" :`, cat.name);
-  if (!newName || newName.trim() === cat.name) return;
-  const trimmed = newName.trim();
-  if (state.categories.some(c => c.id !== id && c.name.toLowerCase() === trimmed.toLowerCase())) {
-    toast('Une catégorie avec ce nom existe déjà', 'warn');
-    return;
-  }
-  cat.name = trimmed;
-  save();
-  populateCategorySelects();
-  renderCatFilters();
-  renderCatGrid();
-  renderGamesTable();
-  toast(`Catégorie renommée en "${trimmed}"`, 'success');
-}
 
 function deleteCategory(id) {
   const cat = getCatById(id);
@@ -2604,7 +2624,7 @@ function renderCatGrid() {
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="cat-count-badge">${games.length}</span>
-            <button class="btn btn-ghost btn-sm btn-icon" onclick="editCategoryName(${cat.id})" title="Renommer">✏️</button>
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="openEditCategory(${cat.id})" title="Modifier">✏️</button>
             <button class="btn btn-danger btn-sm btn-icon" onclick="deleteCategory(${cat.id})" title="Supprimer">✕</button>
           </div>
         </div>
