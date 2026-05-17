@@ -2610,7 +2610,7 @@ async function toggleGameHidden(id) {
 function renderCatGrid() {
   const grid = document.getElementById('cat-grid');
   const catCards = state.categories.map(cat => {
-    const games = state.games.filter(g => g.catId === cat.id && isGameVisible(g))
+    const games = state.games.filter(g => g.catId === cat.id && isGameVisible(g) && !g.hidden)
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
     const pills = games.length === 0
       ? '<span class="cat-empty">Aucun jeu — déposez ici</span>'
@@ -2643,7 +2643,7 @@ function renderCatGrid() {
       </div>
     `;
   }).join('');
-  const uncatGames = state.games.filter(g => !g.catId && isGameVisible(g))
+  const uncatGames = state.games.filter(g => !g.catId && isGameVisible(g) && !g.hidden)
     .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   const uncatSection = document.getElementById('uncat-section');
   const uncatPillsEl = document.getElementById('uncat-pills');
