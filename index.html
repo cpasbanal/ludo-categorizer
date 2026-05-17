@@ -1620,11 +1620,18 @@ async function syncBidirectional() {
     const localByNotionId = new Map(state.games.filter(g => g.notionId).map(g => [g.notionId, g]));
     const unsynced = state.games.filter(g => !g.notionId);
 
-    // Notion-side games: Notion wins for data, preserve local IDs where possible
+    // Notion-side games: Notion wins for data, preserve local IDs and local category
     let nextId = state.games.length ? Math.max(...state.games.map(g => g.id), 0) + 1 : 1;
+    const categoryMismatches = [];
     const merged = notionGames.map(ng => {
       const local = localByNotionId.get(ng.notionId);
-      return { ...ng, id: local ? local.id : nextId++ };
+      if (!local) return { ...ng, id: nextId++ };
+      // Local category wins: if local has a category set that Notion doesn't reflect, keep it and push later
+      const catId = local.catId != null ? local.catId : ng.catId;
+      if (local.catId != null && local.catId !== ng.catId) {
+        categoryMismatches.push({ ...ng, id: local.id, catId });
+      }
+      return { ...ng, id: local.id, catId };
     });
 
     // Push local-only games to Notion
@@ -1640,12 +1647,25 @@ async function syncBidirectional() {
       merged.push({ ...g, id: g.id || nextId++ });
     }
 
+    // Push category mismatches to Notion (local category wins)
+    let catPushed = 0;
+    for (const g of categoryMismatches) {
+      try {
+        await notion.update(g.notionId, g, getCatById(g.catId)?.name || '');
+        catPushed++;
+      } catch(e) {
+        console.warn('[Notion] Failed to push category for:', g.name, e.message);
+      }
+    }
+
     state.games = merged;
     state.nextGameId = merged.length ? Math.max(...merged.map(g => g.id)) + 1 : 1;
     saveGamesLocal();
     localStorage.setItem('ludo_last_sync', String(Date.now()));
     connStatus = 'ok';
-    const msg = `Sync OK : ${notionGames.length} depuis Notion` + (pushed ? `, ${pushed} envoyé(s)` : '');
+    const msg = `Sync OK : ${notionGames.length} depuis Notion`
+      + (pushed    ? `, ${pushed} jeu(x) envoyé(s)`           : '')
+      + (catPushed ? `, ${catPushed} catégorie(s) mise(s) à jour` : '');
     dbg(msg, 'ok');
     toast(msg, 'success');
   } catch(e) {
