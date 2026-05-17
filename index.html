@@ -1228,6 +1228,18 @@ const SETTINGS_DEFAULTS = {
 };
 let settings = { ...SETTINGS_DEFAULTS };
 
+function applyUrlParams() {
+  const p = new URLSearchParams(location.search);
+  let changed = false;
+  if (p.has('token'))  { settings.notionToken      = p.get('token');  changed = true; }
+  if (p.has('db'))     { settings.notionDbId        = p.get('db');     changed = true; }
+  if (p.has('aikey'))  { settings.openrouterApiKey  = p.get('aikey'); changed = true; }
+  if (changed) {
+    persistSettings();
+    history.replaceState({}, '', location.pathname);
+  }
+}
+
 const RETIRED_MODELS = [
   'google/gemini-2.0-flash-exp:free',
   'deepseek/deepseek-r1:free',
@@ -1538,6 +1550,7 @@ async function init() {
   migrateOldData();
   loadOwners();
   loadSettings();
+  applyUrlParams();
   loadCategories();
   injectOwnerStyles();
   ['game-owner-input', 'edit-owner-input', 'text-owner'].forEach(renderOwnerChecks);
