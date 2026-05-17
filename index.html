@@ -981,8 +981,8 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         <div class="card">
           <div class="card-title"><span class="icon">✨</span> Intelligence Artificielle</div>
           <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:14px;line-height:1.6;">
-            Utilisez n'importe quel modèle IA via OpenRouter pour catégoriser vos jeux.<br>
-            Clé API disponible sur <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>.
+            Catégorisez vos jeux automatiquement via <strong>OpenRouter</strong> — gratuit, sans carte bancaire.<br>
+            Créez un compte et obtenez votre clé sur <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>.
           </p>
           <div class="form-row">
             <div>
@@ -990,8 +990,21 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
               <input type="password" id="settings-claude-key" placeholder="sk-or-v1-…" autocomplete="off">
             </div>
           </div>
+          <div class="form-row">
+            <div>
+              <label>Modèle IA <span style="font-weight:400;color:var(--muted);">(tous gratuits)</span></label>
+              <select id="settings-or-model">
+                <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash — Google</option>
+                <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B — Meta</option>
+                <option value="deepseek/deepseek-r1:free">DeepSeek R1 — DeepSeek</option>
+                <option value="deepseek/deepseek-chat-v3-0324:free">DeepSeek V3 — DeepSeek</option>
+                <option value="qwen/qwq-32b:free">QwQ 32B — Qwen</option>
+                <option value="mistralai/mistral-7b-instruct:free">Mistral 7B — Mistral</option>
+              </select>
+            </div>
+          </div>
           <p style="font-size:0.78rem;color:var(--muted);margin-top:6px;">
-            La clé est stockée uniquement dans votre navigateur (localStorage).
+            La clé et le modèle sont stockés uniquement dans votre navigateur (localStorage).
           </p>
         </div>
 
@@ -1173,6 +1186,7 @@ const SETTINGS_DEFAULTS = {
   propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée',
   ownerType: 'multi_select',
   openrouterApiKey: '',
+  openrouterModel: 'google/gemini-2.0-flash-exp:free',
 };
 let settings = { ...SETTINGS_DEFAULTS };
 
@@ -1739,6 +1753,7 @@ function renderSettingsPage() {
   document.getElementById('map-duree').value         = settings.propDuree           || 'Durée';
   document.getElementById('map-owner-type').value    = settings.ownerType           || 'multi_select';
   document.getElementById('settings-claude-key').value = settings.openrouterApiKey  || '';
+  document.getElementById('settings-or-model').value   = settings.openrouterModel   || 'google/gemini-2.0-flash-exp:free';
   const st = document.getElementById('settings-status');
   st.textContent = '';
   st.className   = 'settings-status';
@@ -1786,6 +1801,7 @@ async function saveSettingsAndSync() {
   settings.propDuree           = document.getElementById('map-duree').value.trim()        || '';
   settings.ownerType           = document.getElementById('map-owner-type').value;
   settings.openrouterApiKey    = document.getElementById('settings-claude-key').value.trim();
+  settings.openrouterModel     = document.getElementById('settings-or-model').value;
   persistSettings();
 
   if (token && dbId) {
@@ -2111,7 +2127,7 @@ Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
         'X-Title': 'Ludo-Categorizer',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-haiku-4-5',
+        model: settings.openrouterModel || 'google/gemini-2.0-flash-exp:free',
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       }),
