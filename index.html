@@ -777,6 +777,16 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
       </div>
       <div style="padding: 24px;">
+        <div id="uncat-section" style="display:none;margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:1.1rem;">❓</span>
+            <span style="font-weight:700;font-size:0.9rem;">Jeux non classés</span>
+            <span id="uncat-count-badge" class="cat-count-badge">0</span>
+          </div>
+          <div id="uncat-pills" class="cat-games-list" style="flex-wrap:wrap;gap:8px;display:flex;padding:14px;background:var(--surface2);border:1.5px dashed var(--border2);border-radius:var(--r);"
+               ondragover="catDragOver(event,null)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,null)">
+          </div>
+        </div>
         <div class="cat-grid" id="cat-grid"></div>
       </div>
     </div>
@@ -1020,7 +1030,9 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           </p>
           <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <span style="font-size:0.8rem;font-weight:700;color:var(--text-med);">📋 Journal des appels IA</span>
+              <button class="btn btn-ghost" style="font-size:0.8rem;font-weight:700;color:var(--text-med);padding:2px 6px;gap:6px;display:flex;align-items:center;" onclick="toggleAILog()">
+                📋 Journal des appels IA <span id="ai-log-toggle-icon">▼</span>
+              </button>
               <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearAILog()">✕ Effacer</button>
             </div>
             <pre id="ai-log" style="margin:0;padding:12px;background:#0f1117;color:#a8ff78;border-radius:6px;font-size:0.72rem;line-height:1.7;height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:'Courier New',monospace;border:1px solid #2a2a3a;">En attente du premier appel IA…</pre>
@@ -1135,7 +1147,10 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
       </div>
       <div>
         <label>Emoji</label>
-        <input type="text" id="cat-emoji-input" placeholder="🎲" maxlength="2">
+        <button type="button" class="avatar-btn" id="cat-emoji-avatar-btn" onclick="openAvatarPicker('cat-emoji-avatar-btn','cat-emoji-input')">
+          <span id="cat-emoji-icon-display">🎲</span>
+        </button>
+        <input type="hidden" id="cat-emoji-input" value="🎲">
       </div>
     </div>
     <div class="form-row">
@@ -1272,6 +1287,14 @@ function clearAILog() {
   const el = document.getElementById('ai-log');
   if (el) el.textContent = '';
 }
+function toggleAILog() {
+  const log = document.getElementById('ai-log');
+  const icon = document.getElementById('ai-log-toggle-icon');
+  if (!log) return;
+  const hidden = log.style.display === 'none';
+  log.style.display = hidden ? '' : 'none';
+  if (icon) icon.textContent = hidden ? '▼' : '▶';
+}
 async function runFullDiagnostic() {
   clearDebugLog();
   const token = document.getElementById('settings-token').value.trim();
@@ -1399,8 +1422,7 @@ class NotionAPI {
     } else {
       p[m.propProprietaire] = { select: { name: owners[0] || 'J' } };
     }
-    if (catName && m.propCategorie) p[m.propCategorie] = { select: { name: catName } };
-    if (m.propDuree)   p[m.propDuree]   = { rich_text: [{ text: { content: game.duration || '' } }] };
+    if (m.propCategorie) p[m.propCategorie] = catName ? { select: { name: catName } } : { select: null };
     p['Exclure de la sélection'] = { checkbox: !!game.hidden };
     return p;
   }
@@ -1435,6 +1457,7 @@ const DEFAULT_OWNERS = [
 let ownersList = [...DEFAULT_OWNERS];
 
 function ownerPalette(idx) { return OWNER_PALETTE[idx % OWNER_PALETTE.length]; }
+function toCssToken(key) { return key.replace(/\s+/g, '_'); }
 function isValidOwner(key) { return !!resolveOwnerKey(key); }
 function resolveOwnerKey(nameOrKey) {
   const o = ownersList.find(o =>
@@ -1458,8 +1481,8 @@ function loadOwners() {
 function injectOwnerStyles() {
   const css = ownersList.map((o, i) => {
     const c = ownerPalette(i);
-    return `.owner-${o.key}{background:${c.bg};color:${c.color};border:1px solid ${c.border}}` +
-           `.owner-check.sel-${o.key}{background:${c.bg};color:${c.color};border-color:${c.border}}`;
+    return `.owner-${toCssToken(o.key)}{background:${c.bg};color:${c.color};border:1px solid ${c.border}}` +
+           `.owner-check.sel-${toCssToken(o.key)}{background:${c.bg};color:${c.color};border-color:${c.border}}`;
   }).join('');
   let s = document.getElementById('dynamic-owner-styles');
   if (!s) { s = document.createElement('style'); s.id = 'dynamic-owner-styles'; document.head.appendChild(s); }
@@ -1724,7 +1747,7 @@ function notionPagesToGames(pages) {
       players = pMin != null && pMax != null && pMin !== pMax ? `${pMin}-${pMax}` : String(pMin ?? pMax ?? '');
     }
 
-    const duration = m.propDuree   ? (props[m.propDuree]?.rich_text   || []).map(t => t.plain_text).join('') : '';
+    const duration = m.propDuree   ? (props[m.propDuree]?.select?.name || '') : '';
 
     return { id: id++, name, owner: owners, catId, players, duration, hidden, notionId: page.id };
   }).filter(Boolean);
@@ -2032,7 +2055,7 @@ function ownerBadgeHtml(owner) {
     .filter(k => !getOwnerData(k)?.hidden)
     .map(k => {
       const o = getOwnerData(k);
-      return `<span class="owner-badge owner-${k}">${o ? o.icon : '👤'} ${o ? o.label : k}</span>`;
+      return `<span class="owner-badge owner-${toCssToken(k)}">${o ? o.icon : '👤'} ${o ? o.label : k}</span>`;
     }).join(' ');
 }
 
@@ -2048,8 +2071,8 @@ function catChipHtml(catId) {
 function toggleOwnerCheck(label, key) {
   const cb = label.querySelector('input');
   cb.checked = !cb.checked;
-  ownersList.forEach(o => label.classList.remove('sel-' + o.key));
-  if (cb.checked) label.classList.add('sel-' + key);
+  ownersList.forEach(o => label.classList.remove('sel-' + toCssToken(o.key)));
+  if (cb.checked) label.classList.add('sel-' + toCssToken(key));
 }
 
 function getSelectedOwners(containerId) {
@@ -2064,8 +2087,8 @@ function setOwnerChecks(containerId, owners) {
     const cb = label.querySelector('input');
     const key = cb.value;
     cb.checked = arr.includes(key);
-    ownersList.forEach(o => label.classList.remove('sel-' + o.key));
-    if (cb.checked) label.classList.add('sel-' + key);
+    ownersList.forEach(o => label.classList.remove('sel-' + toCssToken(o.key)));
+    if (cb.checked) label.classList.add('sel-' + toCssToken(key));
   });
 }
 
@@ -2372,7 +2395,8 @@ JSON uniquement — {"numJeu": numCat, ...}`;
 // ============================
 function openAddCategory() {
   document.getElementById('cat-name-input').value = '';
-  document.getElementById('cat-emoji-input').value = '';
+  document.getElementById('cat-emoji-input').value = '🎲';
+  document.getElementById('cat-emoji-icon-display').textContent = '🎲';
   document.getElementById('cat-desc-input').value = '';
   document.getElementById('cat-keyword-input').value = '';
   currentKeywords = [];
@@ -2589,6 +2613,17 @@ function renderCatGrid() {
       </div>
     `;
   }).join('');
+  const uncatGames = state.games.filter(g => !g.catId && isGameVisible(g));
+  const uncatSection = document.getElementById('uncat-section');
+  const uncatPillsEl = document.getElementById('uncat-pills');
+  const uncatBadge   = document.getElementById('uncat-count-badge');
+  if (uncatSection) uncatSection.style.display = uncatGames.length ? '' : 'none';
+  if (uncatBadge)   uncatBadge.textContent = uncatGames.length;
+  if (uncatPillsEl) uncatPillsEl.innerHTML = uncatGames.length === 0
+    ? '<span class="cat-empty">Aucun jeu non classé</span>'
+    : uncatGames.map(g =>
+        `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="null">${escHtml(g.name)}</span>`
+      ).join('');
   grid.innerHTML = catCards + `
     <div class="cat-card cat-card-new" onclick="openAddCategory()">
       <span style="font-size:1.2rem;">+</span>
