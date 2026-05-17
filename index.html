@@ -1493,7 +1493,14 @@ async function init() {
   ['game-owner-input', 'edit-owner-input', 'text-owner'].forEach(renderOwnerChecks);
   if (settings.notionToken && settings.notionDbId) {
     notion = new NotionAPI(settings.notionToken, settings.notionDbId, buildMapping());
-    await syncBidirectional();
+    const lastSync = parseInt(localStorage.getItem('ludo_last_sync') || '0');
+    const twoHours = 2 * 60 * 60 * 1000;
+    if (Date.now() - lastSync > twoHours) {
+      await syncBidirectional();
+    } else {
+      loadGamesLocal();
+      dbg(`Sync ignoré (dernière sync il y a ${Math.round((Date.now() - lastSync) / 60000)} min)`, 'ok');
+    }
   } else {
     loadGamesLocal();
   }
@@ -1572,6 +1579,7 @@ async function syncBidirectional() {
     state.games = merged;
     state.nextGameId = merged.length ? Math.max(...merged.map(g => g.id)) + 1 : 1;
     saveGamesLocal();
+    localStorage.setItem('ludo_last_sync', String(Date.now()));
     connStatus = 'ok';
     const msg = `Sync OK : ${notionGames.length} depuis Notion` + (pushed ? `, ${pushed} envoyé(s)` : '');
     dbg(msg, 'ok');
