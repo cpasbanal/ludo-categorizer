@@ -2105,29 +2105,26 @@ async function runAICategorize() {
   closeModal('modal-recat');
   toast(`✨ Envoi de ${targets.length} jeux à l'IA…`, 'info');
 
-  // Normalize text for robust matching (remove accents, lowercase, trim)
-  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-
-  // Use numeric keys so AI can't mangle game names
-  const catList = state.categories
-    .map(c => `- "${c.name}" (${c.emoji}${c.desc ? ': ' + c.desc : ''})`)
-    .join('\n');
+  // Both games and categories use numeric indices — no string matching at all
+  const cats = state.categories;
+  const catList = cats.map((c, i) => `${i + 1}. ${c.name}${c.desc ? ' (' + c.desc + ')' : ''}`).join('\n');
   const indexedGames = targets.map((g, i) => `${i + 1}. ${g.name}`).join('\n');
 
-  const prompt = `Tu es un assistant de ludothèque. Catégorise chaque jeu de société numéroté dans l'une des catégories ci-dessous.
+  const prompt = `Tu es un assistant de ludothèque. Associe chaque jeu numéroté à la catégorie numérotée la plus appropriée.
 
-Catégories disponibles :
+Catégories :
 ${catList}
 
-Jeux à catégoriser :
+Jeux :
 ${indexedGames}
 
-Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, de la forme :
-{"1": "NomDeLaCatégorie", "2": "NomDeLaCatégorie", ...}
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après :
+{"numéroDuJeu": numéroDeLaCatégorie, ...}
 
-Utilise le numéro du jeu comme clé. Si un jeu ne correspond à aucune catégorie, omets-le du JSON.`;
+Exemple : {"1": 3, "2": 1, "5": 2}
+Si un jeu ne correspond à aucune catégorie, omets-le.`;
 
-  dbg(`IA prompt (${targets.length} jeux, ${state.categories.length} catégories)`);
+  dbg(`IA → ${targets.length} jeux, ${cats.length} catégories, modèle: ${settings.openrouterModel}`);
 
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent('https://openrouter.ai/api/v1/chat/completions')}`;
   let raw;
@@ -2142,7 +2139,7 @@ Utilise le numéro du jeu comme clé. Si un jeu ne correspond à aucune catégor
       },
       body: JSON.stringify({
         model: settings.openrouterModel || 'google/gemini-2.0-flash-exp:free',
-        max_tokens: 2048,
+        max_tokens: 1024,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -2156,43 +2153,42 @@ Utilise le numéro du jeu comme clé. Si un jeu ne correspond à aucune catégor
     raw = await res.json();
   } catch(e) {
     toast('Erreur IA : ' + e.message, 'error');
-    dbg('runAICategorize error: ' + e.message, 'error');
+    dbg('Erreur appel API : ' + e.message, 'error');
     return;
   }
 
   const text = raw?.choices?.[0]?.message?.content || '';
-  dbg('IA réponse brute : ' + text.slice(0, 400));
+  dbg('Réponse IA complète :\n' + text);
 
   let mapping = {};
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Pas de JSON dans la réponse');
+    const jsonMatch = text.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) throw new Error('Aucun JSON trouvé');
     mapping = JSON.parse(jsonMatch[0]);
-    dbg(`Mapping parsé : ${Object.keys(mapping).length} entrées`);
+    dbg(`JSON parsé : ${Object.keys(mapping).length} entrées`);
   } catch(e) {
-    toast('Impossible de lire la réponse de l\'IA', 'error');
-    dbg('Parse erreur : ' + e.message + ' | texte : ' + text.slice(0, 100), 'error');
+    toast('Réponse IA illisible — voir journal debug dans Paramètres', 'error');
+    dbg('Erreur parsing JSON : ' + e.message, 'error');
     return;
   }
-
-  // Build normalized category lookup
-  const catByNorm = {};
-  state.categories.forEach(c => { catByNorm[norm(c.name)] = c; });
 
   let count = 0;
   for (let i = 0; i < targets.length; i++) {
     const game = targets[i];
-    const catName = mapping[String(i + 1)];
-    if (!catName) { dbg(`  [${i+1}] ${game.name} → non catégorisé`); continue; }
-    const cat = catByNorm[norm(catName)];
-    if (!cat) { dbg(`  [${i+1}] ${game.name} → catégorie inconnue : "${catName}"`, 'warn'); continue; }
+    const catIdx = parseInt(mapping[String(i + 1)]);
+    if (!catIdx || catIdx < 1 || catIdx > cats.length) continue;
+    const cat = cats[catIdx - 1];
     if (game.catId !== cat.id) { game.catId = cat.id; count++; }
     dbg(`  [${i+1}] ${game.name} → ${cat.name}`, 'ok');
   }
 
   save();
   renderGamesTable(); renderCatFilters(); renderCatGrid(); renderDashboard();
-  toast(`✨ ${count} jeu${count > 1 ? 'x' : ''} catégorisé${count > 1 ? 's' : ''} par l'IA`, 'success');
+  if (count > 0) {
+    toast(`✨ ${count} jeu${count > 1 ? 'x' : ''} catégorisé${count > 1 ? 's' : ''} par l'IA`, 'success');
+  } else {
+    toast('IA : 0 jeux catégorisés — voir journal debug dans Paramètres', 'warn');
+  }
 }
 
 // ============================
