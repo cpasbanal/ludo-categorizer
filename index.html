@@ -444,6 +444,19 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 .keyword-tag::after { content: ' ×'; opacity: 0.6; }
 
 /* ===== TOASTS ===== */
+.ai-progress-banner {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  background: var(--green-dark); color: #fff;
+  padding: 8px 20px; border-radius: 20px; font-size: 0.82rem; font-weight: 600;
+  z-index: 300; display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  animation: toast-in 0.2s ease;
+}
+.ai-progress-spinner {
+  width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
 .toast {
   background: var(--surface); border: 1px solid var(--border);
@@ -2176,79 +2189,40 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après :
 Exemple : {"1": 3, "2": 1, "5": 2}
 Si un jeu ne correspond à aucune catégorie, omets-le.`;
 
-  // Ordered fallback list — tried in order when a model fails
-  const FREE_MODELS = [
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'deepseek/deepseek-chat:free',
-    'google/gemma-3-27b-it:free',
-    'qwen/qwen3-8b:free',
-    'mistralai/mistral-7b-instruct:free',
-  ];
-  const preferredModel = settings.openrouterModel || FREE_MODELS[0];
-  const startIdx = FREE_MODELS.indexOf(preferredModel);
-  const modelQueue = startIdx >= 0
-    ? [FREE_MODELS[startIdx], ...FREE_MODELS.filter((_, i) => i !== startIdx)]
-    : [preferredModel, ...FREE_MODELS];
-
-  // Call one model; throws on error (includes status code for 429 detection)
-  const callModel = async (model, batchPrompt) => {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${settings.openrouterApiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.href,
-        'X-Title': 'Ludo-Categorizer',
-      },
-      body: JSON.stringify({ model, max_tokens: 512, messages: [{ role: 'user', content: batchPrompt }] }),
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      let msg = `HTTP ${res.status}`;
-      try { const b = JSON.parse(errText); msg = b?.error?.message || msg; } catch(_) {}
-      const err = new Error(msg);
-      err.status = res.status;
-      throw err;
-    }
-    return res.json();
-  };
-
-  // Call with automatic model fallback; waits 3 s before switching on 429
-  const callWithFallback = async (batchPrompt, batchLabel) => {
-    for (let mi = 0; mi < modelQueue.length; mi++) {
-      const model = modelQueue[mi];
-      try {
-        aiDbg(`${batchLabel} | model: ${model}`);
-        const raw = await callModel(model, batchPrompt);
-        if (mi > 0) aiDbg(`  ↳ Basculé sur ${model}`, 'ok');
-        return raw;
-      } catch(e) {
-        if (e.status === 401) throw new Error('Clé API invalide ou expirée');
-        aiDbg(`  ⚠ ${model} → ${e.message}`, 'warn');
-        if (mi < modelQueue.length - 1) {
-          const wait = e.status === 429 ? 3000 : 1000;
-          aiDbg(`  Attente ${wait / 1000}s avant modèle suivant…`);
-          await new Promise(r => setTimeout(r, wait));
-        }
-      }
-    }
-    throw new Error('Tous les modèles ont échoué');
-  };
-
-  // Split into batches of 25 to stay well under token limits
+  const model = settings.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free';
   const BATCH = 25;
+  const DELAY_MS = 5000; // 5 s between batches
+  const totalBatches = Math.ceil(targets.length / BATCH);
   const catListShort = cats.map((c, i) => `${i + 1}.${c.name}`).join('|');
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+  aiDbg(`Modèle : ${model} | ${totalBatches} lot(s) de ${BATCH} | délai ${DELAY_MS / 1000}s`);
+
+  // Floating progress banner
+  const banner = document.createElement('div');
+  banner.className = 'ai-progress-banner';
+  const setBanner = (txt) => { banner.innerHTML = `<div class="ai-progress-spinner"></div>${txt}`; };
+  setBanner(`Lot 0 / ${totalBatches}`);
+  document.body.appendChild(banner);
+
   let count = 0;
-  aiDbg(`Découpage en lots de ${BATCH} — ${Math.ceil(targets.length / BATCH)} lot(s)`);
 
   for (let b = 0; b < targets.length; b += BATCH) {
-    const chunk = targets.slice(b, b + BATCH);
     const batchNum = Math.floor(b / BATCH) + 1;
-    const totalBatches = Math.ceil(targets.length / BATCH);
-    const gameLines = chunk.map((g, i) => `${i + 1}.${g.name}`).join('\n');
+    const chunk = targets.slice(b, b + BATCH);
 
+    if (b > 0) {
+      // Wait between batches
+      for (let s = DELAY_MS / 1000; s > 0; s--) {
+        setBanner(`Lot ${batchNum - 1} / ${totalBatches} terminé — prochaine dans ${s}s`);
+        await sleep(1000);
+      }
+    }
+
+    setBanner(`Lot ${batchNum} / ${totalBatches} en cours…`);
+    aiDbg(`Lot ${batchNum}/${totalBatches} — ${chunk.length} jeux`);
+
+    const gameLines = chunk.map((g, i) => `${i + 1}.${g.name}`).join('\n');
     const batchPrompt =
 `Catégories (numéro.nom) : ${catListShort}
 
@@ -2257,14 +2231,33 @@ ${gameLines}
 
 JSON uniquement — {"numJeu": numCat, ...}`;
 
-    if (b > 0) await sleep(2000); // 2 s between batches to respect rate limits
-    toast(`✨ IA : lot ${batchNum}/${totalBatches}…`, 'info');
-
     let raw;
     try {
-      raw = await callWithFallback(batchPrompt, `Lot ${batchNum}/${totalBatches}`);
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${settings.openrouterApiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.href,
+          'X-Title': 'Ludo-Categorizer',
+        },
+        body: JSON.stringify({ model, max_tokens: 512, messages: [{ role: 'user', content: batchPrompt }] }),
+      });
+      aiDbg(`HTTP ${res.status}`, res.ok ? 'ok' : 'error');
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        let msg = `HTTP ${res.status}`;
+        try { const b = JSON.parse(errText); msg = b?.error?.message || msg; } catch(_) {}
+        if (res.status === 429) {
+          aiDbg('429 — quota atteint, arrêt immédiat', 'error');
+          toast('IA : quota atteint (429) — réessayez plus tard', 'error');
+          break;
+        }
+        throw new Error(msg);
+      }
+      raw = await res.json();
     } catch(e) {
-      aiDbg(`Lot ${batchNum} abandonné : ${e.message}`, 'error');
+      aiDbg(`Erreur lot ${batchNum} : ${e.message}`, 'error');
       toast('Erreur IA : ' + e.message, 'error');
       break;
     }
@@ -2274,8 +2267,8 @@ JSON uniquement — {"numJeu": numCat, ...}`;
 
     let mapping = {};
     try {
-      const jsonMatch = text.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) mapping = JSON.parse(jsonMatch[0]);
+      const m = text.match(/\{[\s\S]*?\}/);
+      if (m) mapping = JSON.parse(m[0]);
     } catch(_) { aiDbg(`Lot ${batchNum} : JSON illisible`, 'warn'); }
 
     for (let i = 0; i < chunk.length; i++) {
@@ -2287,11 +2280,11 @@ JSON uniquement — {"numJeu": numCat, ...}`;
       aiDbg(`  ${game.name} → ${cat.name}`, 'ok');
     }
 
-    // Render progress after each batch
     save();
     renderGamesTable(); renderCatFilters(); renderCatGrid(); renderDashboard();
   }
 
+  banner.remove();
   aiDbg(`Résultat final : ${count} jeu(x) catégorisé(s)`, count > 0 ? 'ok' : 'warn');
   if (count > 0) {
     toast(`✨ ${count} jeu${count > 1 ? 'x' : ''} catégorisé${count > 1 ? 's' : ''} par l'IA`, 'success');
