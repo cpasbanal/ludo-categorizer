@@ -995,10 +995,10 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             <div>
               <label>Modèle IA <span style="font-weight:400;color:var(--muted);">(tous gratuits)</span></label>
               <select id="settings-or-model" onchange="saveAISettings()">
-                <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash — Google</option>
                 <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B — Meta</option>
                 <option value="deepseek/deepseek-chat:free">DeepSeek V3 — DeepSeek</option>
-                <option value="qwen/qwen-2.5-72b-instruct:free">Qwen 2.5 72B — Alibaba</option>
+                <option value="google/gemma-3-27b-it:free">Gemma 3 27B — Google</option>
+                <option value="qwen/qwen3-8b:free">Qwen3 8B — Alibaba</option>
                 <option value="mistralai/mistral-7b-instruct:free">Mistral 7B — Mistral</option>
               </select>
             </div>
@@ -1062,8 +1062,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     </label>
     <div class="modal-footer" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeModal('modal-recat')">Annuler</button>
-      <button class="btn btn-secondary" id="btn-recat-ai" onclick="runAICategorize()" title="Catégoriser avec Claude AI">✨ Avec l'IA</button>
-      <button class="btn btn-primary" onclick="runRecategorize()">↻ Recatégoriser</button>
+      <button class="btn btn-primary" id="btn-recat-ai" onclick="runAICategorize()">✨ Recatégoriser avec l'IA</button>
     </div>
   </div>
 </div>
@@ -1193,12 +1192,23 @@ const SETTINGS_DEFAULTS = {
   propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée',
   ownerType: 'multi_select',
   openrouterApiKey: '',
-  openrouterModel: 'google/gemini-2.0-flash-exp:free',
+  openrouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
 };
 let settings = { ...SETTINGS_DEFAULTS };
 
+const RETIRED_MODELS = [
+  'google/gemini-2.0-flash-exp:free',
+  'deepseek/deepseek-r1:free',
+  'deepseek/deepseek-chat-v3-0324:free',
+  'qwen/qwq-32b:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+];
 function loadSettings() {
   try { settings = { ...SETTINGS_DEFAULTS, ...JSON.parse(localStorage.getItem('ludo_settings') || '{}') }; } catch(e) {}
+  if (RETIRED_MODELS.includes(settings.openrouterModel)) {
+    settings.openrouterModel = SETTINGS_DEFAULTS.openrouterModel;
+    persistSettings();
+  }
 }
 function persistSettings() {
   localStorage.setItem('ludo_settings', JSON.stringify(settings));
@@ -1785,7 +1795,7 @@ function renderSettingsPage() {
   document.getElementById('map-duree').value         = settings.propDuree           || 'Durée';
   document.getElementById('map-owner-type').value    = settings.ownerType           || 'multi_select';
   document.getElementById('settings-claude-key').value = settings.openrouterApiKey  || '';
-  document.getElementById('settings-or-model').value   = settings.openrouterModel   || 'google/gemini-2.0-flash-exp:free';
+  document.getElementById('settings-or-model').value   = settings.openrouterModel   || 'meta-llama/llama-3.3-70b-instruct:free';
   const st = document.getElementById('settings-status');
   st.textContent = '';
   st.className   = 'settings-status';
@@ -2169,7 +2179,7 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
   aiDbg(`Envoi requête → ${targets.length} jeux, ${cats.length} catégories`);
 
   // OpenRouter natively supports browser CORS — no proxy needed
-  const model = settings.openrouterModel || 'google/gemini-2.0-flash-exp:free';
+  const model = settings.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free';
   aiDbg(`POST https://openrouter.ai/api/v1/chat/completions | model: ${model}`);
   let raw;
   try {
