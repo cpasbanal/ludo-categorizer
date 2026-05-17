@@ -2176,9 +2176,7 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après :
 Exemple : {"1": 3, "2": 1, "5": 2}
 Si un jeu ne correspond à aucune catégorie, omets-le.`;
 
-  aiDbg(`Envoi requête → ${targets.length} jeux, ${cats.length} catégories`);
-
-  // Ordered fallback list — try next model on 429/provider error
+  // Ordered fallback list — tried in order when a model fails
   const FREE_MODELS = [
     'meta-llama/llama-3.3-70b-instruct:free',
     'deepseek/deepseek-chat:free',
@@ -2188,13 +2186,12 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
   ];
   const preferredModel = settings.openrouterModel || FREE_MODELS[0];
   const startIdx = FREE_MODELS.indexOf(preferredModel);
-  // Build attempt order: preferred first, then the rest in sequence
-  const attemptOrder = startIdx >= 0
+  const modelQueue = startIdx >= 0
     ? [FREE_MODELS[startIdx], ...FREE_MODELS.filter((_, i) => i !== startIdx)]
     : [preferredModel, ...FREE_MODELS];
 
-  const callOpenRouter = async (model) => {
-    aiDbg(`POST openrouter.ai | model: ${model}`);
+  // Call one model; throws on error (includes status code for 429 detection)
+  const callModel = async (model, batchPrompt) => {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -2203,73 +2200,99 @@ Si un jeu ne correspond à aucune catégorie, omets-le.`;
         'HTTP-Referer': window.location.href,
         'X-Title': 'Ludo-Categorizer',
       },
-      body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model, max_tokens: 512, messages: [{ role: 'user', content: batchPrompt }] }),
     });
-    aiDbg(`HTTP ${res.status} ${res.statusText}`, res.ok ? 'ok' : 'warn');
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       let msg = `HTTP ${res.status}`;
       try { const b = JSON.parse(errText); msg = b?.error?.message || msg; } catch(_) {}
-      if (res.status === 401) throw new Error('AUTH:' + msg);
-      throw new Error(msg);
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
     }
     return res.json();
   };
 
-  let raw;
-  try {
-    let lastErr;
-    for (let i = 0; i < attemptOrder.length; i++) {
-      const model = attemptOrder[i];
+  // Call with automatic model fallback; waits 3 s before switching on 429
+  const callWithFallback = async (batchPrompt, batchLabel) => {
+    for (let mi = 0; mi < modelQueue.length; mi++) {
+      const model = modelQueue[mi];
       try {
-        raw = await callOpenRouter(model);
-        if (i > 0) aiDbg(`Basculé sur : ${model}`, 'ok');
-        break;
+        aiDbg(`${batchLabel} | model: ${model}`);
+        const raw = await callModel(model, batchPrompt);
+        if (mi > 0) aiDbg(`  ↳ Basculé sur ${model}`, 'ok');
+        return raw;
       } catch(e) {
-        lastErr = e;
-        if (e.message.startsWith('AUTH:')) throw new Error(e.message.slice(5)); // don't retry on bad key
-        aiDbg(`Échec ${model} : ${e.message}`, 'warn');
-        if (i < attemptOrder.length - 1) aiDbg(`Essai du modèle suivant…`);
+        if (e.status === 401) throw new Error('Clé API invalide ou expirée');
+        aiDbg(`  ⚠ ${model} → ${e.message}`, 'warn');
+        if (mi < modelQueue.length - 1) {
+          const wait = e.status === 429 ? 3000 : 1000;
+          aiDbg(`  Attente ${wait / 1000}s avant modèle suivant…`);
+          await new Promise(r => setTimeout(r, wait));
+        }
       }
     }
-    if (!raw) throw lastErr;
-  } catch(e) {
-    toast('Erreur IA : ' + e.message, 'error');
-    aiDbg('Tous les modèles ont échoué : ' + e.message, 'error');
-    return;
-  }
+    throw new Error('Tous les modèles ont échoué');
+  };
 
-  const text = raw?.choices?.[0]?.message?.content || '';
-  aiDbg('Réponse brute :\n' + text);
-
-  let mapping = {};
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
-    if (!jsonMatch) throw new Error('Aucun JSON trouvé dans la réponse');
-    mapping = JSON.parse(jsonMatch[0]);
-    aiDbg(`JSON parsé : ${Object.keys(mapping).length} entrées`, 'ok');
-  } catch(e) {
-    toast('Réponse IA illisible — voir journal IA dans Paramètres', 'error');
-    aiDbg('Erreur parsing JSON : ' + e.message, 'error');
-    return;
-  }
+  // Split into batches of 25 to stay well under token limits
+  const BATCH = 25;
+  const catListShort = cats.map((c, i) => `${i + 1}.${c.name}`).join('|');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   let count = 0;
-  for (let i = 0; i < targets.length; i++) {
-    const game = targets[i];
-    const catIdx = parseInt(mapping[String(i + 1)]);
-    if (!catIdx || catIdx < 1 || catIdx > cats.length) {
-      aiDbg(`  [${i+1}] ${game.name} → pas de catégorie assignée`);
-      continue;
+  aiDbg(`Découpage en lots de ${BATCH} — ${Math.ceil(targets.length / BATCH)} lot(s)`);
+
+  for (let b = 0; b < targets.length; b += BATCH) {
+    const chunk = targets.slice(b, b + BATCH);
+    const batchNum = Math.floor(b / BATCH) + 1;
+    const totalBatches = Math.ceil(targets.length / BATCH);
+    const gameLines = chunk.map((g, i) => `${i + 1}.${g.name}`).join('\n');
+
+    const batchPrompt =
+`Catégories (numéro.nom) : ${catListShort}
+
+Jeux :
+${gameLines}
+
+JSON uniquement — {"numJeu": numCat, ...}`;
+
+    if (b > 0) await sleep(2000); // 2 s between batches to respect rate limits
+    toast(`✨ IA : lot ${batchNum}/${totalBatches}…`, 'info');
+
+    let raw;
+    try {
+      raw = await callWithFallback(batchPrompt, `Lot ${batchNum}/${totalBatches}`);
+    } catch(e) {
+      aiDbg(`Lot ${batchNum} abandonné : ${e.message}`, 'error');
+      toast('Erreur IA : ' + e.message, 'error');
+      break;
     }
-    const cat = cats[catIdx - 1];
-    if (game.catId !== cat.id) { game.catId = cat.id; count++; }
-    aiDbg(`  [${i+1}] ${game.name} → ${cat.name}`, 'ok');
+
+    const text = raw?.choices?.[0]?.message?.content || '';
+    aiDbg(`Réponse lot ${batchNum} :\n${text}`);
+
+    let mapping = {};
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) mapping = JSON.parse(jsonMatch[0]);
+    } catch(_) { aiDbg(`Lot ${batchNum} : JSON illisible`, 'warn'); }
+
+    for (let i = 0; i < chunk.length; i++) {
+      const game = chunk[i];
+      const catIdx = parseInt(mapping[String(i + 1)]);
+      if (!catIdx || catIdx < 1 || catIdx > cats.length) continue;
+      const cat = cats[catIdx - 1];
+      if (game.catId !== cat.id) { game.catId = cat.id; count++; }
+      aiDbg(`  ${game.name} → ${cat.name}`, 'ok');
+    }
+
+    // Render progress after each batch
+    save();
+    renderGamesTable(); renderCatFilters(); renderCatGrid(); renderDashboard();
   }
 
-  save();
-  renderGamesTable(); renderCatFilters(); renderCatGrid(); renderDashboard();
-  aiDbg(`Résultat : ${count} jeu(x) catégorisé(s)`, count > 0 ? 'ok' : 'warn');
+  aiDbg(`Résultat final : ${count} jeu(x) catégorisé(s)`, count > 0 ? 'ok' : 'warn');
   if (count > 0) {
     toast(`✨ ${count} jeu${count > 1 ? 'x' : ''} catégorisé${count > 1 ? 's' : ''} par l'IA`, 'success');
   } else {
