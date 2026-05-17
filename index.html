@@ -987,13 +987,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="form-row">
             <div>
               <label>Clé API OpenRouter</label>
-              <input type="password" id="settings-claude-key" placeholder="sk-or-v1-…" autocomplete="off">
+              <input type="password" id="settings-claude-key" placeholder="sk-or-v1-…" autocomplete="off" onchange="saveAISettings()">
             </div>
           </div>
           <div class="form-row">
             <div>
               <label>Modèle IA <span style="font-weight:400;color:var(--muted);">(tous gratuits)</span></label>
-              <select id="settings-or-model">
+              <select id="settings-or-model" onchange="saveAISettings()">
                 <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash — Google</option>
                 <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B — Meta</option>
                 <option value="deepseek/deepseek-r1:free">DeepSeek R1 — DeepSeek</option>
@@ -1786,6 +1786,14 @@ async function testNotionConnection() {
       </small>`;
     statusEl.className = 'settings-status error';
   }
+}
+
+function saveAISettings() {
+  settings.openrouterApiKey = document.getElementById('settings-claude-key').value.trim();
+  settings.openrouterModel  = document.getElementById('settings-or-model').value;
+  persistSettings();
+  const aiBtn = document.getElementById('btn-recat-ai');
+  if (aiBtn) aiBtn.style.display = settings.openrouterApiKey ? '' : 'none';
 }
 
 async function saveSettingsAndSync() {
