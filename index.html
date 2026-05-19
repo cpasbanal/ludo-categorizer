@@ -361,6 +361,11 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 }
 .cat-game-pill:active { cursor: grabbing; }
 .cat-game-pill.dragging { opacity: 0.35; }
+.pill-drag-handle { opacity: 0; font-size: 0.75rem; color: var(--muted); margin-right: 3px; cursor: grab; transition: opacity 0.15s; }
+.pill-edit-btn { opacity: 0; background: none; border: none; cursor: pointer; font-size: 0.7rem; padding: 0 0 0 4px; line-height: 1; color: var(--muted); transition: opacity 0.15s; }
+.cat-game-pill:hover .pill-drag-handle,
+.cat-game-pill:hover .pill-edit-btn { opacity: 1; }
+.pill-edit-btn:hover { color: var(--green-dark); }
 .cat-empty { font-size: 0.78rem; color: var(--muted); font-style: italic; padding: 3px 0; }
 .cat-card.drag-over { border-color: var(--green); background: var(--green-light); box-shadow: 0 0 0 2px var(--green-mid); }
 .cat-card.drag-over .cat-games-list { outline: 2px dashed var(--green-mid); outline-offset: 2px; border-radius: 4px; }
@@ -1000,6 +1005,12 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
               <input id="map-duree" placeholder="Durée" value="Durée">
             </div>
           </div>
+          <div class="form-row form-row-2">
+            <div>
+              <label>Description <span style="font-weight:400;color:var(--muted);">(laisser vide = ignorer)</span></label>
+              <input id="map-description" placeholder="Ma description" value="Ma description">
+            </div>
+          </div>
           <div class="notion-info" style="margin-top:8px;margin-bottom:0;">
             Les valeurs attendues pour le champ Propriétaire correspondent aux codes définis ci-dessous.<br>
             En multi-sélection, un jeu peut avoir plusieurs propriétaires simultanément.
@@ -1212,6 +1223,36 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   </div>
 </div>
 
+<!-- MODAL: GAME QUICK EDIT -->
+<div class="modal-overlay" id="modal-game-quick-edit">
+  <div class="modal" style="max-width:480px;">
+    <input type="hidden" id="quick-edit-game-id">
+    <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;">
+      <img id="quick-edit-image" src="" alt="" style="display:none;width:100px;height:100px;object-fit:cover;border-radius:var(--r-xs);border:1px solid var(--border);flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <div class="modal-title" id="quick-edit-title" style="margin-bottom:8px;font-size:1rem;"></div>
+        <div style="font-size:0.78rem;color:var(--muted);" id="quick-edit-meta"></div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Joueurs</label>
+        <input type="text" id="quick-edit-players" placeholder="ex: 2-4">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Description</label>
+        <textarea id="quick-edit-description" rows="5" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--text);font-size:0.85rem;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-game-quick-edit')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveGameQuickEdit()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
@@ -1221,7 +1262,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 const SETTINGS_DEFAULTS = {
   notionToken: '', notionDbId: '',
   propNom: 'Nom', propProprietaire: 'Propriétaire',
-  propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée',
+  propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée', propDescription: 'Ma description',
   ownerType: 'multi_select',
   openrouterApiKey: '',
   openrouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -1264,6 +1305,7 @@ function buildMapping() {
     propCategorie:    settings.propCategorie    || 'Catégorie',
     propJoueurs:      settings.propJoueurs      || '',
     propDuree:        settings.propDuree        || '',
+    propDescription:  settings.propDescription  || '',
     ownerType:        settings.ownerType        || 'multi_select',
   };
 }
@@ -1428,6 +1470,13 @@ class NotionAPI {
     return this._req(`/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ archived: true }) });
   }
 
+  async fetchPageImage(pageId) {
+    const data = await this._req(`/blocks/${pageId}/children?page_size=20`);
+    const imgBlock = (data.results || []).find(b => b.type === 'image');
+    if (!imgBlock) return null;
+    return imgBlock.image?.file?.url || imgBlock.image?.external?.url || null;
+  }
+
   _props(game, catName) {
     const m = this.m;
     const owners = normalizeOwner(game.owner);
@@ -1439,7 +1488,8 @@ class NotionAPI {
     } else {
       p[m.propProprietaire] = { select: { name: owners[0] || 'J' } };
     }
-    if (m.propCategorie) p[m.propCategorie] = catName ? { select: { name: catName } } : { select: null };
+    if (m.propCategorie)   p[m.propCategorie]   = catName ? { select: { name: catName } } : { select: null };
+    if (m.propDescription) p[m.propDescription] = { rich_text: [{ text: { content: game.description || '' } }] };
     p['Exclure de la sélection'] = { checkbox: !!game.hidden };
     return p;
   }
@@ -1786,9 +1836,10 @@ function notionPagesToGames(pages) {
       players = pMin != null && pMax != null && pMin !== pMax ? `${pMin}-${pMax}` : String(pMin ?? pMax ?? '');
     }
 
-    const duration = m.propDuree   ? (props[m.propDuree]?.select?.name || '') : '';
+    const duration    = m.propDuree       ? (props[m.propDuree]?.select?.name || '') : '';
+    const description = m.propDescription ? (props[m.propDescription]?.rich_text || []).map(t => t.plain_text).join('') : '';
 
-    return { id: id++, name, owner: owners, catId, players, duration, hidden, notionId: page.id };
+    return { id: id++, name, owner: owners, catId, players, duration, description, hidden, notionId: page.id };
   }).filter(Boolean);
 
   const hiddenCount = games.filter(g => g.hidden).length;
@@ -1867,6 +1918,7 @@ function renderSettingsPage() {
   document.getElementById('map-categorie').value     = settings.propCategorie       || 'Catégorie';
   document.getElementById('map-joueurs').value       = settings.propJoueurs         || 'Joueurs';
   document.getElementById('map-duree').value         = settings.propDuree           || 'Durée';
+  document.getElementById('map-description').value  = settings.propDescription     || 'Ma description';
   document.getElementById('map-owner-type').value    = settings.ownerType           || 'multi_select';
   document.getElementById('settings-claude-key').value = settings.openrouterApiKey  || '';
   document.getElementById('settings-or-model').value   = settings.openrouterModel   || 'meta-llama/llama-3.3-70b-instruct:free';
@@ -2002,6 +2054,7 @@ async function saveSettingsAndSync() {
   settings.propCategorie       = document.getElementById('map-categorie').value.trim()    || '';
   settings.propJoueurs         = document.getElementById('map-joueurs').value.trim()      || '';
   settings.propDuree           = document.getElementById('map-duree').value.trim()        || '';
+  settings.propDescription     = document.getElementById('map-description').value.trim()  || '';
   settings.ownerType           = document.getElementById('map-owner-type').value;
   settings.openrouterApiKey    = document.getElementById('settings-claude-key').value.trim();
   settings.openrouterModel     = document.getElementById('settings-or-model').value;
@@ -2209,6 +2262,43 @@ function editGame(id) {
   document.getElementById('edit-game-players').value = g.players || '';
   document.getElementById('edit-game-duration').value = g.duration || '';
   document.getElementById('modal-edit-game').classList.add('open');
+}
+
+async function openGameQuickEdit(id, event) {
+  if (event) { event.preventDefault(); event.stopPropagation(); }
+  const g = state.games.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById('quick-edit-game-id').value = id;
+  document.getElementById('quick-edit-title').textContent = g.name;
+  document.getElementById('quick-edit-players').value = g.players || '';
+  document.getElementById('quick-edit-description').value = g.description || '';
+  const metaEl = document.getElementById('quick-edit-meta');
+  metaEl.textContent = [g.duration, g.players ? `${g.players} joueurs` : ''].filter(Boolean).join(' · ');
+  const imgEl = document.getElementById('quick-edit-image');
+  imgEl.style.display = 'none';
+  imgEl.src = '';
+  document.getElementById('modal-game-quick-edit').classList.add('open');
+  if (notion && g.notionId) {
+    try {
+      const url = await notion.fetchPageImage(g.notionId);
+      if (url) { imgEl.src = url; imgEl.style.display = ''; }
+    } catch(_) {}
+  }
+}
+
+async function saveGameQuickEdit() {
+  const id = parseInt(document.getElementById('quick-edit-game-id').value);
+  const g  = state.games.find(x => x.id === id);
+  if (!g) return;
+  g.players     = document.getElementById('quick-edit-players').value.trim();
+  g.description = document.getElementById('quick-edit-description').value.trim();
+  if (notion && g.notionId) {
+    try { await notion.update(g.notionId, g, getCatById(g.catId)?.name || ''); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+  save();
+  closeModal('modal-game-quick-edit');
+  toast('Jeu mis à jour', 'success');
 }
 
 async function updateGame() {
@@ -2650,7 +2740,7 @@ function renderCatGrid() {
     const pills = games.length === 0
       ? '<span class="cat-empty">Aucun jeu — déposez ici</span>'
       : games.map(g =>
-          `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="${cat.id}">${escHtml(g.name)}</span>`
+          `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="${cat.id}"><span class="pill-drag-handle">⠿</span>${escHtml(g.name)}<button class="pill-edit-btn" onclick="openGameQuickEdit(${g.id},event)" title="Modifier">✏️</button></span>`
         ).join('');
     return `
       <div class="cat-card" data-cat-id="${cat.id}"
@@ -2688,7 +2778,7 @@ function renderCatGrid() {
   if (uncatPillsEl) uncatPillsEl.innerHTML = uncatGames.length === 0
     ? '<span class="cat-empty">Aucun jeu non classé</span>'
     : uncatGames.map(g =>
-        `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="null">${escHtml(g.name)}</span>`
+        `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="null"><span class="pill-drag-handle">⠿</span>${escHtml(g.name)}<button class="pill-edit-btn" onclick="openGameQuickEdit(${g.id},event)" title="Modifier">✏️</button></span>`
       ).join('');
   grid.innerHTML = catCards + `
     <div class="cat-card cat-card-new" onclick="openAddCategory()">
