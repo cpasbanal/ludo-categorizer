@@ -384,6 +384,18 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 .cat-card-new:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
 .cat-drag-handle { cursor: grab; color: var(--muted); padding: 0 4px; opacity: 0.35; transition: opacity 0.15s; user-select: none; font-size: 1rem; line-height: 1; }
 .cat-drag-handle:hover { opacity: 1; }
+.thumb-grid { display: flex; flex-wrap: wrap; gap: 8px; min-height: 80px; padding: 4px 0; }
+.game-thumb-wrap { position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border); cursor: pointer; flex-shrink: 0; background: var(--surface2); transition: border-color 0.15s, transform 0.15s; }
+.game-thumb-wrap:hover { border-color: var(--green-mid); transform: scale(1.05); }
+.game-thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.game-thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; text-align: center; color: var(--muted); padding: 6px; line-height: 1.3; }
+.game-thumb-name { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.75)); color: #fff; font-size: 0.58rem; font-weight: 600; padding: 10px 4px 3px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0; transition: opacity 0.15s; }
+.game-thumb-wrap:hover .game-thumb-name { opacity: 1; }
+.visual-cat-section { margin-bottom: 28px; }
+.visual-cat-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.visual-cat-header-title { font-family: var(--font-head); font-size: 0.95rem; font-weight: 800; color: var(--green-dark); display: flex; align-items: center; gap: 6px; }
+.visual-drop-zone { min-height: 88px; padding: 8px; background: var(--surface2); border: 1.5px dashed var(--border2); border-radius: var(--r); transition: border-color 0.15s, background 0.15s; }
+.visual-drop-zone.drag-over { border-color: var(--green); background: var(--green-light); }
 .cat-card.cat-dragging { opacity: 0.35; box-shadow: none; }
 .cat-card.cat-reorder-target { border-color: var(--orange-dark, #e65100); box-shadow: 0 0 0 2px var(--orange-muted, #ffe0b2); }
 
@@ -669,6 +681,9 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
       <div class="nav-item" onclick="showPage('categories')">
         <span class="nav-icon">⊟</span> Catégories
       </div>
+      <div class="nav-item" onclick="showPage('visual')">
+        <span class="nav-icon">🖼</span> Jeux sans limite
+      </div>
       <div class="nav-section">Ajouter</div>
       <div class="nav-item" onclick="showPage('import')">
         <span class="nav-icon">↑</span> Importer
@@ -797,6 +812,31 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           </div>
         </div>
         <div class="cat-grid" id="cat-grid"></div>
+      </div>
+    </div>
+
+    <!-- JEUX SANS LIMITE -->
+    <div id="page-visual" class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <div class="page-title">Jeux sans limite</div>
+        </div>
+        <div class="topbar-actions">
+          <span id="visual-loading-msg" style="font-size:0.8rem;color:var(--muted);display:none;">⏳ Chargement des images…</span>
+        </div>
+      </div>
+      <div style="padding:24px;">
+        <div id="visual-uncat-section" style="display:none;margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:1.1rem;">❓</span>
+            <span style="font-weight:700;font-size:0.9rem;">Jeux non classés</span>
+            <span id="visual-uncat-badge" class="cat-count-badge">0</span>
+          </div>
+          <div id="visual-uncat-thumbs" class="thumb-grid"
+               ondragover="catDragOver(event,null)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,null)"></div>
+        </div>
+        <div id="visual-grid"></div>
       </div>
     </div>
 
@@ -2114,6 +2154,7 @@ function showPage(id) {
   if (id === 'dashboard')  renderDashboard();
   if (id === 'games')      renderGamesTable();
   if (id === 'categories') renderCatGrid();
+  if (id === 'visual')     renderVisualGrid();
   if (id === 'settings')   renderSettingsPage();
 }
 
@@ -2273,7 +2314,7 @@ async function openGameQuickEdit(id, event) {
   document.getElementById('quick-edit-players').value = g.players || '';
   document.getElementById('quick-edit-description').value = g.description || '';
   const metaEl = document.getElementById('quick-edit-meta');
-  metaEl.textContent = [g.duration, g.players ? `${g.players} joueurs` : ''].filter(Boolean).join(' · ');
+  metaEl.textContent = [g.duration ? `${g.duration} min` : '', g.players ? `${g.players} joueurs` : ''].filter(Boolean).join(' · ');
   const imgEl = document.getElementById('quick-edit-image');
   imgEl.style.display = 'none';
   imgEl.src = '';
@@ -2874,8 +2915,121 @@ async function catDrop(e, catId) {
   }
   save();
   renderCatGrid();
+  if (document.getElementById('page-visual')?.classList.contains('active')) renderVisualGrid();
   renderGamesTable();
   renderDashboard();
+}
+
+// ============================
+// VISUAL GRID (Jeux sans limite)
+// ============================
+const imageCache = new Map(); // notionId → { url, fetchedAt }
+let visualGeneration = 0;     // increment on each renderVisualGrid call to cancel stale loads
+
+function thumbHtml(g) {
+  const cached = g.notionId ? imageCache.get(g.notionId) : null;
+  const inner = cached?.url
+    ? `<img src="${cached.url}" alt="${escHtml(g.name)}">`
+    : `<div class="game-thumb-placeholder">${escHtml(g.name)}</div>`;
+  return `<div class="game-thumb-wrap" data-game-id="${g.id}" data-notion-id="${g.notionId || ''}"
+               onclick="openGameQuickEdit(${g.id},event)"
+               draggable="true" data-draggable="game"
+               ondragstart="visualThumbDragStart(event,${g.id})"
+               ondragend="visualThumbDragEnd(event)">
+    ${inner}
+    <div class="game-thumb-name">${escHtml(g.name)}</div>
+  </div>`;
+}
+
+function renderVisualGrid() {
+  visualGeneration++;
+  const gen = visualGeneration;
+  const grid = document.getElementById('visual-grid');
+  if (!grid) return;
+
+  // Uncategorized
+  const uncatGames = state.games.filter(g => !g.catId && isGameVisible(g) && !g.hidden)
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  const uncatSection = document.getElementById('visual-uncat-section');
+  const uncatThumbs  = document.getElementById('visual-uncat-thumbs');
+  const uncatBadge   = document.getElementById('visual-uncat-badge');
+  if (uncatSection) uncatSection.style.display = uncatGames.length ? '' : 'none';
+  if (uncatBadge)   uncatBadge.textContent = uncatGames.length;
+  if (uncatThumbs)  uncatThumbs.innerHTML = uncatGames.map(thumbHtml).join('');
+
+  // Category sections
+  grid.innerHTML = state.categories.map(cat => {
+    const games = state.games.filter(g => g.catId === cat.id && isGameVisible(g) && !g.hidden)
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    const thumbs = games.length === 0
+      ? '<span class="cat-empty">Aucun jeu — déposez ici</span>'
+      : games.map(thumbHtml).join('');
+    return `<div class="visual-cat-section">
+      <div class="visual-cat-header">
+        <div class="visual-cat-header-title">
+          <span>${cat.emoji}</span>${escHtml(cat.name)}
+        </div>
+        <span class="cat-count-badge">${games.length}</span>
+      </div>
+      <div class="visual-drop-zone thumb-grid" data-cat-id="${cat.id}"
+           ondragover="catDragOver(event,${cat.id})" ondragleave="catDragLeave(event)" ondrop="catDrop(event,${cat.id})">
+        ${thumbs}
+      </div>
+    </div>`;
+  }).join('');
+
+  loadVisualImages(gen);
+}
+
+async function loadVisualImages(gen) {
+  if (!notion) return;
+  const msgEl = document.getElementById('visual-loading-msg');
+  const needFetch = state.games.filter(g =>
+    g.notionId && isGameVisible(g) && !g.hidden &&
+    !imageCache.has(g.notionId)
+  );
+  if (!needFetch.length) return;
+  if (msgEl) msgEl.style.display = '';
+
+  const CONCURRENCY = 4;
+  let i = 0;
+  async function worker() {
+    while (i < needFetch.length) {
+      if (visualGeneration !== gen) return; // page changed, abort
+      const g = needFetch[i++];
+      try {
+        const url = await notion.fetchPageImage(g.notionId);
+        imageCache.set(g.notionId, { url, fetchedAt: Date.now() });
+        if (visualGeneration !== gen) return;
+        // Update all thumb elements for this game
+        document.querySelectorAll(`.game-thumb-wrap[data-notion-id="${g.notionId}"]`).forEach(el => {
+          el.querySelector('.game-thumb-placeholder')?.remove();
+          el.querySelector('img')?.remove();
+          if (url) {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = g.name;
+            el.prepend(img);
+          }
+        });
+      } catch(_) {
+        imageCache.set(g.notionId, { url: null, fetchedAt: Date.now() });
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  if (visualGeneration === gen && msgEl) msgEl.style.display = 'none';
+}
+
+function visualThumbDragStart(e, gameId) {
+  draggedGameId = gameId;
+  draggedCatId  = null;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.style.opacity = '0.35';
+}
+function visualThumbDragEnd(e) {
+  e.currentTarget.style.opacity = '';
+  document.querySelectorAll('.visual-drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
 }
 
 function renderDashboard() {
