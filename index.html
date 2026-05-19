@@ -397,6 +397,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 .visual-drop-zone { min-height: 88px; padding: 8px; background: var(--surface2); border: 1.5px dashed var(--border2); border-radius: var(--r); transition: border-color 0.15s, background 0.15s; }
 .visual-drop-zone.drag-over { border-color: var(--green); background: var(--green-light); }
 .cat-card.cat-dragging { opacity: 0.35; box-shadow: none; }
+.thumb-action-btn { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 800; opacity: 0; transition: opacity 0.15s, background 0.1s; z-index: 3; line-height: 1; padding: 0; }
+.game-thumb-wrap:hover .thumb-action-btn { opacity: 1; }
+.thumb-remove-btn { top: 3px; right: 3px; background: rgba(200,40,40,0.82); color: #fff; }
+.thumb-remove-btn:hover { background: rgba(200,40,40,1) !important; }
+.thumb-add-btn { top: 3px; right: 3px; background: rgba(30,140,70,0.82); color: #fff; font-size: 1rem; }
+.thumb-add-btn:hover { background: rgba(30,140,70,1) !important; }
+.visual-library-section { margin-bottom: 28px; }
 .cat-card.cat-reorder-target { border-color: var(--orange-dark, #e65100); box-shadow: 0 0 0 2px var(--orange-muted, #ffe0b2); }
 
 /* ===== AVATAR PICKER ===== */
@@ -827,14 +834,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
       </div>
       <div style="padding:24px;">
-        <div id="visual-uncat-section" style="display:none;margin-bottom:24px;">
+        <div id="visual-library-section" class="visual-library-section">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span style="font-size:1.1rem;">❓</span>
-            <span style="font-weight:700;font-size:0.9rem;">Jeux non classés</span>
-            <span id="visual-uncat-badge" class="cat-count-badge">0</span>
+            <span style="font-size:1.1rem;">🎲</span>
+            <span style="font-weight:700;font-size:0.95rem;font-family:var(--font-head);color:var(--green-dark);">Ma ludothèque</span>
+            <span id="visual-library-badge" class="cat-count-badge">0</span>
           </div>
-          <div id="visual-uncat-thumbs" class="thumb-grid"
-               ondragover="catDragOver(event,null)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,null)"></div>
+          <div id="visual-library-thumbs" class="thumb-grid"></div>
         </div>
         <div id="visual-grid"></div>
       </div>
@@ -1049,6 +1055,10 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             <div>
               <label>Description <span style="font-weight:400;color:var(--muted);">(laisser vide = ignorer)</span></label>
               <input id="map-description" placeholder="Ma description" value="Ma description">
+            </div>
+            <div>
+              <label>Sélection <span style="font-weight:400;color:var(--muted);">(multi-select, laisser vide = ignorer)</span></label>
+              <input id="map-selection" placeholder="Sélection" value="Sélection">
             </div>
           </div>
           <div class="notion-info" style="margin-top:8px;margin-bottom:0;">
@@ -1303,6 +1313,7 @@ const SETTINGS_DEFAULTS = {
   notionToken: '', notionDbId: '',
   propNom: 'Nom', propProprietaire: 'Propriétaire',
   propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée', propDescription: 'Ma description',
+  propSelection: 'Sélection',
   ownerType: 'multi_select',
   openrouterApiKey: '',
   openrouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -1346,6 +1357,7 @@ function buildMapping() {
     propJoueurs:      settings.propJoueurs      || '',
     propDuree:        settings.propDuree        || '',
     propDescription:  settings.propDescription  || '',
+    propSelection:    settings.propSelection    || '',
     ownerType:        settings.ownerType        || 'multi_select',
   };
 }
@@ -1530,8 +1542,17 @@ class NotionAPI {
     }
     if (m.propCategorie)   p[m.propCategorie]   = catName ? { select: { name: catName } } : { select: null };
     if (m.propDescription) p[m.propDescription] = { rich_text: [{ text: { content: game.description || '' } }] };
+    if (m.propSelection)   p[m.propSelection]   = { multi_select: (game.selection || []).map(n => ({ name: n })) };
     p['Exclure de la sélection'] = { checkbox: !!game.hidden };
     return p;
+  }
+
+  async updateSelection(notionId, selection) {
+    const m = this.m;
+    if (!m.propSelection) return;
+    return this._req(`/pages/${notionId}`, { method: 'PATCH', body: JSON.stringify({
+      properties: { [m.propSelection]: { multi_select: selection.map(n => ({ name: n })) } }
+    })});
   }
 }
 
@@ -1640,6 +1661,7 @@ async function init() {
   migrateOldData();
   loadOwners();
   loadSettings();
+  loadImageCache();
   applyUrlParams();
   loadCategories();
   injectOwnerStyles();
@@ -1878,8 +1900,9 @@ function notionPagesToGames(pages) {
 
     const duration    = m.propDuree       ? (props[m.propDuree]?.select?.name || '') : '';
     const description = m.propDescription ? (props[m.propDescription]?.rich_text || []).map(t => t.plain_text).join('') : '';
+    const selection   = m.propSelection   ? (props[m.propSelection]?.multi_select || []).map(o => o.name) : [];
 
-    return { id: id++, name, owner: owners, catId, players, duration, description, hidden, notionId: page.id };
+    return { id: id++, name, owner: owners, catId, players, duration, description, hidden, selection, notionId: page.id };
   }).filter(Boolean);
 
   const hiddenCount = games.filter(g => g.hidden).length;
@@ -1959,6 +1982,7 @@ function renderSettingsPage() {
   document.getElementById('map-joueurs').value       = settings.propJoueurs         || 'Joueurs';
   document.getElementById('map-duree').value         = settings.propDuree           || 'Durée';
   document.getElementById('map-description').value  = settings.propDescription     || 'Ma description';
+  document.getElementById('map-selection').value    = settings.propSelection       || 'Sélection';
   document.getElementById('map-owner-type').value    = settings.ownerType           || 'multi_select';
   document.getElementById('settings-claude-key').value = settings.openrouterApiKey  || '';
   document.getElementById('settings-or-model').value   = settings.openrouterModel   || 'meta-llama/llama-3.3-70b-instruct:free';
@@ -2095,6 +2119,7 @@ async function saveSettingsAndSync() {
   settings.propJoueurs         = document.getElementById('map-joueurs').value.trim()      || '';
   settings.propDuree           = document.getElementById('map-duree').value.trim()        || '';
   settings.propDescription     = document.getElementById('map-description').value.trim()  || '';
+  settings.propSelection       = document.getElementById('map-selection').value.trim()    || '';
   settings.ownerType           = document.getElementById('map-owner-type').value;
   settings.openrouterApiKey    = document.getElementById('settings-claude-key').value.trim();
   settings.openrouterModel     = document.getElementById('settings-or-model').value;
@@ -2923,20 +2948,45 @@ async function catDrop(e, catId) {
 // ============================
 // VISUAL GRID (Jeux sans limite)
 // ============================
-const imageCache = new Map(); // notionId → { url, fetchedAt }
-let visualGeneration = 0;     // increment on each renderVisualGrid call to cancel stale loads
+const VISUAL_SELECTION = 'Jeux sans limite';
+const IMAGE_CACHE_TTL  = 50 * 60 * 1000; // 50 min — Notion URLs expire in ~60 min
 
-function thumbHtml(g) {
+const imageCache = new Map(); // notionId → { url, fetchedAt }
+let visualGeneration = 0;
+
+function loadImageCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('ludo_img_cache') || '{}');
+    const now  = Date.now();
+    for (const [id, entry] of Object.entries(raw)) {
+      if ((now - entry.fetchedAt) < IMAGE_CACHE_TTL) imageCache.set(id, entry);
+    }
+  } catch(_) {}
+}
+
+function saveImageCache() {
+  try {
+    const obj = {};
+    for (const [id, entry] of imageCache) obj[id] = entry;
+    localStorage.setItem('ludo_img_cache', JSON.stringify(obj));
+  } catch(_) {}
+}
+
+function thumbHtml(g, mode = 'selected') {
   const cached = g.notionId ? imageCache.get(g.notionId) : null;
   const inner = cached?.url
     ? `<img src="${cached.url}" alt="${escHtml(g.name)}">`
     : `<div class="game-thumb-placeholder">${escHtml(g.name)}</div>`;
+  const actionBtn = mode === 'selected'
+    ? `<button class="thumb-action-btn thumb-remove-btn" onclick="removeFromVisual(${g.id},event)" title="Retirer de la sélection">✕</button>`
+    : `<button class="thumb-action-btn thumb-add-btn" onclick="addToVisual(${g.id},event)" title="Ajouter à la sélection">+</button>`;
   return `<div class="game-thumb-wrap" data-game-id="${g.id}" data-notion-id="${g.notionId || ''}"
                onclick="openGameQuickEdit(${g.id},event)"
                draggable="true" data-draggable="game"
                ondragstart="visualThumbDragStart(event,${g.id})"
                ondragend="visualThumbDragEnd(event)">
     ${inner}
+    ${actionBtn}
     <div class="game-thumb-name">${escHtml(g.name)}</div>
   </div>`;
 }
@@ -2947,28 +2997,26 @@ function renderVisualGrid() {
   const grid = document.getElementById('visual-grid');
   if (!grid) return;
 
-  // Uncategorized
-  const uncatGames = state.games.filter(g => !g.catId && isGameVisible(g) && !g.hidden)
+  // Ma ludothèque: games NOT in visual selection
+  const libraryGames = state.games
+    .filter(g => !g.hidden && isGameVisible(g) && !(g.selection || []).includes(VISUAL_SELECTION))
     .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-  const uncatSection = document.getElementById('visual-uncat-section');
-  const uncatThumbs  = document.getElementById('visual-uncat-thumbs');
-  const uncatBadge   = document.getElementById('visual-uncat-badge');
-  if (uncatSection) uncatSection.style.display = uncatGames.length ? '' : 'none';
-  if (uncatBadge)   uncatBadge.textContent = uncatGames.length;
-  if (uncatThumbs)  uncatThumbs.innerHTML = uncatGames.map(thumbHtml).join('');
+  const libBadge  = document.getElementById('visual-library-badge');
+  const libThumbs = document.getElementById('visual-library-thumbs');
+  if (libBadge)  libBadge.textContent = libraryGames.length;
+  if (libThumbs) libThumbs.innerHTML  = libraryGames.map(g => thumbHtml(g, 'library')).join('');
 
-  // Category sections
+  // Category sections: games IN visual selection
   grid.innerHTML = state.categories.map(cat => {
-    const games = state.games.filter(g => g.catId === cat.id && isGameVisible(g) && !g.hidden)
+    const games = state.games
+      .filter(g => g.catId === cat.id && !g.hidden && isGameVisible(g) && (g.selection || []).includes(VISUAL_SELECTION))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
     const thumbs = games.length === 0
-      ? '<span class="cat-empty">Aucun jeu — déposez ici</span>'
-      : games.map(thumbHtml).join('');
-    return `<div class="visual-cat-section">
-      <div class="visual-cat-header">
-        <div class="visual-cat-header-title">
-          <span>${cat.emoji}</span>${escHtml(cat.name)}
-        </div>
+      ? '<span class="cat-empty">Aucun jeu sélectionné</span>'
+      : games.map(g => thumbHtml(g, 'selected')).join('');
+    return `<div class="visual-cat-section" data-cat-id="${cat.id}">
+      <div class="visual-cat-header" id="visual-cat-hdr-${cat.id}">
+        <div class="visual-cat-header-title"><span>${cat.emoji}</span>${escHtml(cat.name)}</div>
         <span class="cat-count-badge">${games.length}</span>
       </div>
       <div class="visual-drop-zone thumb-grid" data-cat-id="${cat.id}"
@@ -2981,36 +3029,82 @@ function renderVisualGrid() {
   loadVisualImages(gen);
 }
 
+async function removeFromVisual(gameId, event) {
+  event.preventDefault(); event.stopPropagation();
+  const g = state.games.find(x => x.id === gameId);
+  if (!g) return;
+  g.selection = (g.selection || []).filter(s => s !== VISUAL_SELECTION);
+  save();
+  renderVisualGrid();
+  if (notion && g.notionId) {
+    try { await notion.updateSelection(g.notionId, g.selection); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+}
+
+async function addToVisual(gameId, event) {
+  event.preventDefault(); event.stopPropagation();
+  const g = state.games.find(x => x.id === gameId);
+  if (!g) return;
+
+  // Fly-to-category animation
+  const thumbEl = event.target.closest('.game-thumb-wrap');
+  if (thumbEl && g.catId) {
+    const targetHdr = document.getElementById(`visual-cat-hdr-${g.catId}`);
+    if (targetHdr) {
+      const from = thumbEl.getBoundingClientRect();
+      const to   = targetHdr.getBoundingClientRect();
+      const clone = thumbEl.cloneNode(true);
+      Object.assign(clone.style, {
+        position: 'fixed', left: `${from.left}px`, top: `${from.top}px`,
+        width: `${from.width}px`, height: `${from.height}px`,
+        zIndex: 9999, pointerEvents: 'none', margin: 0,
+        transition: 'left 0.38s cubic-bezier(0.4,0,0.2,1), top 0.38s cubic-bezier(0.4,0,0.2,1), transform 0.38s, opacity 0.38s',
+        borderRadius: '8px', overflow: 'hidden',
+      });
+      document.body.appendChild(clone);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        clone.style.left = `${to.left + to.width / 2 - from.width / 4}px`;
+        clone.style.top  = `${to.top + to.height / 2 - from.height / 4}px`;
+        clone.style.transform = 'scale(0.3)';
+        clone.style.opacity = '0';
+      }));
+      setTimeout(() => clone.remove(), 420);
+    }
+  }
+
+  g.selection = [...(g.selection || []), VISUAL_SELECTION];
+  save();
+  setTimeout(() => renderVisualGrid(), 380);
+  if (notion && g.notionId) {
+    try { await notion.updateSelection(g.notionId, g.selection); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+}
+
 async function loadVisualImages(gen) {
   if (!notion) return;
   const msgEl = document.getElementById('visual-loading-msg');
   const needFetch = state.games.filter(g =>
-    g.notionId && isGameVisible(g) && !g.hidden &&
-    !imageCache.has(g.notionId)
+    g.notionId && isGameVisible(g) && !g.hidden && !imageCache.has(g.notionId)
   );
-  if (!needFetch.length) return;
+  if (!needFetch.length) { if (msgEl) msgEl.style.display = 'none'; return; }
   if (msgEl) msgEl.style.display = '';
 
-  const CONCURRENCY = 4;
+  const CONCURRENCY = 3;
   let i = 0;
   async function worker() {
     while (i < needFetch.length) {
-      if (visualGeneration !== gen) return; // page changed, abort
+      if (visualGeneration !== gen) return;
       const g = needFetch[i++];
       try {
         const url = await notion.fetchPageImage(g.notionId);
         imageCache.set(g.notionId, { url, fetchedAt: Date.now() });
         if (visualGeneration !== gen) return;
-        // Update all thumb elements for this game
         document.querySelectorAll(`.game-thumb-wrap[data-notion-id="${g.notionId}"]`).forEach(el => {
           el.querySelector('.game-thumb-placeholder')?.remove();
           el.querySelector('img')?.remove();
-          if (url) {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = g.name;
-            el.prepend(img);
-          }
+          if (url) { const img = document.createElement('img'); img.src = url; img.alt = g.name; el.prepend(img); }
         });
       } catch(_) {
         imageCache.set(g.notionId, { url: null, fetchedAt: Date.now() });
@@ -3019,6 +3113,7 @@ async function loadVisualImages(gen) {
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   if (visualGeneration === gen && msgEl) msgEl.style.display = 'none';
+  saveImageCache();
 }
 
 function visualThumbDragStart(e, gameId) {
