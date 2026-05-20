@@ -30,7 +30,7 @@
   --border2:  #B8CFB8;
 
   /* Text */
-  --text:     #1A2E1A;
+  --text:     #1A2E1A;I
   --text-med: #3D5A3D;
   --muted:    #6B896B;
 
@@ -1902,8 +1902,9 @@ function notionPagesToGames(pages) {
     const duration    = m.propDuree       ? (props[m.propDuree]?.select?.name || '') : '';
     const description = m.propDescription ? (props[m.propDescription]?.rich_text || []).map(t => t.plain_text).join('') : '';
     const selection   = m.propSelection   ? (props[m.propSelection]?.multi_select || []).map(o => o.name) : [];
+    const coverUrl    = page.cover?.external?.url || page.cover?.file?.url || '';
 
-    return { id: id++, name, owner: owners, catId, players, duration, description, hidden, selection, notionId: page.id };
+    return { id: id++, name, owner: owners, catId, players, duration, description, hidden, selection, coverUrl, notionId: page.id };
   }).filter(Boolean);
 
   const hiddenCount = games.filter(g => g.hidden).length;
@@ -2968,6 +2969,7 @@ async function loadStaticManifest() {
 function getGameImageUrl(g) {
   if (!g?.notionId) return null;
   if (staticImageManifest?.[g.notionId]) return `./images/${staticImageManifest[g.notionId]}`;
+  if (g.coverUrl) return g.coverUrl;
   return imageCache.get(g.notionId)?.url || null;
 }
 
@@ -3104,7 +3106,7 @@ async function loadVisualImages(gen) {
   const msgEl = document.getElementById('visual-loading-msg');
   const needFetch = state.games.filter(g =>
     g.notionId && isGameVisible(g) && !g.hidden &&
-    !imageCache.has(g.notionId) && !staticImageManifest?.[g.notionId]
+    !imageCache.has(g.notionId) && !staticImageManifest?.[g.notionId] && !g.coverUrl
   );
   if (!needFetch.length) { if (msgEl) msgEl.style.display = 'none'; return; }
   if (msgEl) msgEl.style.display = '';

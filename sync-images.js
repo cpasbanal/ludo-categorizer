@@ -109,17 +109,19 @@ async function queryAll() {
   return pages;
 }
 
-async function getPageImageUrl(pageId) {
-  const data  = await notionFetch(`/blocks/${pageId}/children?page_size=20`);
-  const block = (data.results || []).find(b => b.type === 'image');
-  if (!block) return null;
-  return block.image?.file?.url || block.image?.external?.url || null;
+// Read cover from the page object already returned by queryAll — no extra API call
+function getPageCoverUrl(page) {
+  if (!page.cover) return null;
+  if (page.cover.type === 'external') return page.cover.external?.url || null;
+  if (page.cover.type === 'file')     return page.cover.file?.url     || null;
+  return null;
 }
 
-async function addExternalImageBlock(pageId, imageUrl) {
-  await notionFetch(`/blocks/${pageId}/children`, {
-    method: 'POST',
-    body: JSON.stringify({ children: [{ type: 'image', image: { type: 'external', external: { url: imageUrl } } }] }),
+// Set page cover image via PATCH /pages/{id}
+async function setPageCover(pageId, imageUrl) {
+  return notionFetch(`/pages/${pageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ cover: { type: 'external', external: { url: imageUrl } } }),
   });
 }
 
@@ -224,13 +226,11 @@ async function main() {
     process.stdout.write(`  …  ${name}\r`);
 
     try {
-      await sleep(NOTION_DELAY_MS);
-
-      // Step 1: existing Notion image block?
-      let imageUrl = await getPageImageUrl(notionId);
+      // Step 1: page cover already in query response — zero extra API call
+      let imageUrl = getPageCoverUrl(page);
       let source   = 'notion';
 
-      // Step 2: no Notion image → BGG
+      // Step 2: no cover → search BGG (French edition preferred)
       if (!imageUrl && BGG_TOKEN) {
         await sleep(BGG_DELAY_MS);
         imageUrl = await bggFrenchImage(name).catch(e => {
@@ -246,20 +246,17 @@ async function main() {
         continue;
       }
 
-      // Guard: only proceed if we have a valid absolute http(s) URL
       if (!isValidHttpUrl(imageUrl)) {
         nNoImg++;
         process.stdout.write(`  —  ${name} (URL invalide: ${imageUrl})\n`);
         continue;
       }
 
-      // Step 3: if found on BGG, add external block to Notion page
+      // Step 3: if found on BGG, set it as the Notion page cover
       if (source === 'bgg') {
         await sleep(NOTION_DELAY_MS);
-        await addExternalImageBlock(notionId, imageUrl).catch(e => {
-          process.stdout.write(`  ⚠  "${name}": ajout Notion échoué — ${e.message}\n`);
-          process.stdout.write(`       URL: ${imageUrl}\n`);
-          process.stdout.write(`       pageId: ${notionId}\n`);
+        await setPageCover(notionId, imageUrl).catch(e => {
+          process.stdout.write(`  ⚠  "${name}": cover Notion échoué — ${e.message}\n`);
         });
       }
 
