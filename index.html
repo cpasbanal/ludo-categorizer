@@ -3047,7 +3047,7 @@ function renderVisualGrid() {
         <span class="cat-count-badge">${games.length}</span>
       </div>
       <div class="visual-drop-zone thumb-grid" data-cat-id="${cat.id}"
-           ondragover="catDragOver(event,${cat.id})" ondragleave="catDragLeave(event)" ondrop="catDrop(event,${cat.id})">
+           ondragover="visualDropZoneDragOver(event)" ondragleave="visualDropZoneDragLeave(event)" ondrop="visualDrop(event,${cat.id})">
         ${thumbs}
       </div>
     </div>`;
@@ -3060,9 +3060,34 @@ async function removeFromVisual(gameId, event) {
   event.preventDefault(); event.stopPropagation();
   const g = state.games.find(x => x.id === gameId);
   if (!g) return;
+
+  // Fly-to-library animation
+  const thumbEl = event.target.closest('.game-thumb-wrap');
+  const libSection = document.getElementById('visual-library-section');
+  if (thumbEl && libSection) {
+    const from = thumbEl.getBoundingClientRect();
+    const to   = libSection.getBoundingClientRect();
+    const clone = thumbEl.cloneNode(true);
+    Object.assign(clone.style, {
+      position: 'fixed', left: `${from.left}px`, top: `${from.top}px`,
+      width: `${from.width}px`, height: `${from.height}px`,
+      zIndex: 9999, pointerEvents: 'none', margin: 0,
+      transition: 'left 0.55s cubic-bezier(0.4,0,0.2,1), top 0.55s cubic-bezier(0.4,0,0.2,1), transform 0.55s, opacity 0.55s',
+      borderRadius: '8px', overflow: 'hidden',
+    });
+    document.body.appendChild(clone);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      clone.style.left = `${to.left + 20}px`;
+      clone.style.top  = `${to.top + to.height / 2 - from.height / 4}px`;
+      clone.style.transform = 'scale(0.3)';
+      clone.style.opacity = '0';
+    }));
+    setTimeout(() => clone.remove(), 600);
+  }
+
   g.selection = (g.selection || []).filter(s => s !== VISUAL_SELECTION);
   save();
-  renderVisualGrid();
+  setTimeout(() => renderVisualGrid(), 520);
   if (notion && g.notionId) {
     try { await notion.updateSelection(g.notionId, g.selection); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
@@ -3086,7 +3111,7 @@ async function addToVisual(gameId, event) {
         position: 'fixed', left: `${from.left}px`, top: `${from.top}px`,
         width: `${from.width}px`, height: `${from.height}px`,
         zIndex: 9999, pointerEvents: 'none', margin: 0,
-        transition: 'left 0.38s cubic-bezier(0.4,0,0.2,1), top 0.38s cubic-bezier(0.4,0,0.2,1), transform 0.38s, opacity 0.38s',
+        transition: 'left 0.55s cubic-bezier(0.4,0,0.2,1), top 0.55s cubic-bezier(0.4,0,0.2,1), transform 0.55s, opacity 0.55s',
         borderRadius: '8px', overflow: 'hidden',
       });
       document.body.appendChild(clone);
@@ -3096,13 +3121,13 @@ async function addToVisual(gameId, event) {
         clone.style.transform = 'scale(0.3)';
         clone.style.opacity = '0';
       }));
-      setTimeout(() => clone.remove(), 420);
+      setTimeout(() => clone.remove(), 600);
     }
   }
 
   g.selection = [...(g.selection || []), VISUAL_SELECTION];
   save();
-  setTimeout(() => renderVisualGrid(), 380);
+  setTimeout(() => renderVisualGrid(), 520);
   if (notion && g.notionId) {
     try { await notion.updateSelection(g.notionId, g.selection); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
@@ -3153,6 +3178,34 @@ function visualThumbDragStart(e, gameId) {
 function visualThumbDragEnd(e) {
   e.currentTarget.style.opacity = '';
   document.querySelectorAll('.visual-drop-zone.drag-over').forEach(z => z.classList.remove('drag-over'));
+}
+
+function visualDropZoneDragOver(e) {
+  if (draggedGameId === null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  e.currentTarget.classList.add('drag-over');
+}
+
+function visualDropZoneDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget))
+    e.currentTarget.classList.remove('drag-over');
+}
+
+async function visualDrop(e, catId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (draggedGameId === null) return;
+  const game = state.games.find(g => g.id === draggedGameId);
+  draggedGameId = null;
+  if (!game || (game.selection || []).includes(VISUAL_SELECTION)) return;
+  game.selection = [...(game.selection || []), VISUAL_SELECTION];
+  save();
+  renderVisualGrid();
+  if (notion && game.notionId) {
+    try { await notion.updateSelection(game.notionId, game.selection); }
+    catch(err) { toast('Notion : ' + err.message, 'warn'); }
+  }
 }
 
 function renderDashboard() {
