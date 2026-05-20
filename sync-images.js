@@ -59,6 +59,11 @@ const NOTION_HEADERS = {
 // ── Utilities ────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+function isValidHttpUrl(str) {
+  try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; }
+  catch(_) { return false; }
+}
+
 function extFromUrlOrType(url, contentType) {
   if (contentType?.includes('png'))                                  return '.png';
   if (contentType?.includes('webp'))                                 return '.webp';
@@ -140,9 +145,10 @@ function xmlAttr(xml, tag, attr) {
   return xml.match(new RegExp(`<${tag}\\b[^>]*\\s${attr}="([^"]*)"`, 'i'))?.[1] ?? null;
 }
 
-// Text content of a tag, normalising protocol-relative URLs
+// Text content of a tag, normalising protocol-relative URLs. Returns null if empty.
 function xmlText(xml, tag) {
   const v = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)`, 'i'))?.[1]?.trim() ?? '';
+  if (!v) return null;
   return v.startsWith('//') ? `https:${v}` : v;
 }
 
@@ -240,11 +246,20 @@ async function main() {
         continue;
       }
 
+      // Guard: only proceed if we have a valid absolute http(s) URL
+      if (!isValidHttpUrl(imageUrl)) {
+        nNoImg++;
+        process.stdout.write(`  —  ${name} (URL invalide: ${imageUrl})\n`);
+        continue;
+      }
+
       // Step 3: if found on BGG, add external block to Notion page
       if (source === 'bgg') {
         await sleep(NOTION_DELAY_MS);
         await addExternalImageBlock(notionId, imageUrl).catch(e => {
           process.stdout.write(`  ⚠  "${name}": ajout Notion échoué — ${e.message}\n`);
+          process.stdout.write(`       URL: ${imageUrl}\n`);
+          process.stdout.write(`       pageId: ${notionId}\n`);
         });
       }
 
