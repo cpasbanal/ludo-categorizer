@@ -777,6 +777,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <table class="games-table" id="games-table">
             <thead id="games-thead">
               <tr>
+                <th style="width:44px;"></th>
                 <th class="sortable" onclick="setSort('name')">Nom du jeu <i class="sort-icon">↕</i></th>
                 <th class="sortable" onclick="setSort('owner')">Propriétaire <i class="sort-icon">↕</i></th>
                 <th class="sortable" onclick="setSort('cat')">Catégorie <i class="sort-icon">↕</i></th>
@@ -1679,6 +1680,7 @@ async function init() {
   } else {
     loadGamesLocal();
   }
+  await loadStaticManifest();
   populateCategorySelects();
   renderOwnerFilters();
   renderCatFilters();
@@ -1689,7 +1691,6 @@ async function init() {
   renderCatGrid();
   updateSidebarStats();
   updateConnDot();
-  await loadStaticManifest();
   showPage(localStorage.getItem('ludo_current_page') || 'dashboard');
 }
 
@@ -2768,8 +2769,14 @@ function renderGamesTable() {
     return;
   }
   empty.style.display = 'none';
-  tbody.innerHTML = games.map(g => `
+  tbody.innerHTML = games.map(g => {
+    const imgUrl = getGameImageUrl(g);
+    const imgCell = imgUrl
+      ? `<td style="padding:4px 6px;"><img src="${imgUrl}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px;display:block;"></td>`
+      : `<td style="padding:4px 6px;"><div style="width:36px;height:36px;border-radius:4px;background:var(--surface2);"></div></td>`;
+    return `
     <tr style="${g.hidden ? 'opacity:0.45;' : ''}">
+      ${imgCell}
       <td class="game-name">${escHtml(g.name)}${g.hidden ? ' <span style="font-size:0.65rem;color:var(--muted);font-weight:600;">exclu</span>' : ''}</td>
       <td>${ownerBadgeHtml(g.owner)}</td>
       <td>${catChipHtml(g.catId)}</td>
@@ -2782,7 +2789,8 @@ function renderGamesTable() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function toggleShowHidden() {
