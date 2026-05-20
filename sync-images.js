@@ -141,7 +141,7 @@ async function getPageBlockImageUrl(pageId) {
 // Requires "Insert content" capability on the Notion integration
 async function addImageBlock(pageId, imageUrl) {
   return notionFetch(`/blocks/${pageId}/children`, {
-    method: 'POST',
+    method: 'PATCH',
     body: JSON.stringify({
       children: [{
         object: 'block',
