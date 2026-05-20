@@ -1,0 +1,6 @@
+# Allow image files despite global gitignore rules
+!*.jpg
+!*.jpeg
+!*.png
+!*.webp
+!*.gif
