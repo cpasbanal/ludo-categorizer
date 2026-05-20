@@ -1689,6 +1689,7 @@ async function init() {
   renderCatGrid();
   updateSidebarStats();
   updateConnDot();
+  await loadStaticManifest();
   showPage(localStorage.getItem('ludo_current_page') || 'dashboard');
 }
 
@@ -2343,8 +2344,10 @@ async function openGameQuickEdit(id, event) {
   const imgEl = document.getElementById('quick-edit-image');
   imgEl.style.display = 'none';
   imgEl.src = '';
+  const staticUrl = getGameImageUrl(g);
+  if (staticUrl) { imgEl.src = staticUrl; imgEl.style.display = ''; }
   document.getElementById('modal-game-quick-edit').classList.add('open');
-  if (notion && g.notionId) {
+  if (!staticUrl && notion && g.notionId) {
     try {
       const url = await notion.fetchPageImage(g.notionId);
       if (url) { imgEl.src = url; imgEl.style.display = ''; }
@@ -2952,7 +2955,21 @@ const VISUAL_SELECTION = 'Jeux sans limite';
 const IMAGE_CACHE_TTL  = 50 * 60 * 1000; // 50 min — Notion URLs expire in ~60 min
 
 const imageCache = new Map(); // notionId → { url, fetchedAt }
-let visualGeneration = 0;
+let visualGeneration  = 0;
+let staticImageManifest = null; // null = not yet loaded, {} = loaded (may be empty)
+
+async function loadStaticManifest() {
+  try {
+    const res = await fetch('./images/manifest.json');
+    staticImageManifest = res.ok ? await res.json() : {};
+  } catch(_) { staticImageManifest = {}; }
+}
+
+function getGameImageUrl(g) {
+  if (!g?.notionId) return null;
+  if (staticImageManifest?.[g.notionId]) return `./images/${staticImageManifest[g.notionId]}`;
+  return imageCache.get(g.notionId)?.url || null;
+}
 
 function loadImageCache() {
   try {
@@ -2973,9 +2990,9 @@ function saveImageCache() {
 }
 
 function thumbHtml(g, mode = 'selected') {
-  const cached = g.notionId ? imageCache.get(g.notionId) : null;
-  const inner = cached?.url
-    ? `<img src="${cached.url}" alt="${escHtml(g.name)}">`
+  const url   = getGameImageUrl(g);
+  const inner = url
+    ? `<img src="${url}" alt="${escHtml(g.name)}">`
     : `<div class="game-thumb-placeholder">${escHtml(g.name)}</div>`;
   const actionBtn = mode === 'selected'
     ? `<button class="thumb-action-btn thumb-remove-btn" onclick="removeFromVisual(${g.id},event)" title="Retirer de la sélection">✕</button>`
@@ -3086,7 +3103,8 @@ async function loadVisualImages(gen) {
   if (!notion) return;
   const msgEl = document.getElementById('visual-loading-msg');
   const needFetch = state.games.filter(g =>
-    g.notionId && isGameVisible(g) && !g.hidden && !imageCache.has(g.notionId)
+    g.notionId && isGameVisible(g) && !g.hidden &&
+    !imageCache.has(g.notionId) && !staticImageManifest?.[g.notionId]
   );
   if (!needFetch.length) { if (msgEl) msgEl.style.display = 'none'; return; }
   if (msgEl) msgEl.style.display = '';
