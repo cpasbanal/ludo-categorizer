@@ -59,6 +59,14 @@ const NOTION_HEADERS = {
 // ── Utilities ────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+function toSnakeCase(name) {
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip accents
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
 function isValidHttpUrl(str) {
   try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; }
   catch(_) { return false; }
@@ -109,7 +117,7 @@ async function queryAll() {
   return pages;
 }
 
-// Read cover from the page object already returned by queryAll — no extra API call
+// Read existing image: cover from query response (free) OR first image block
 function getPageCoverUrl(page) {
   if (!page.cover) return null;
   if (page.cover.type === 'external') return page.cover.external?.url || null;
@@ -117,11 +125,25 @@ function getPageCoverUrl(page) {
   return null;
 }
 
-// Set page cover image via PATCH /pages/{id}
-async function setPageCover(pageId, imageUrl) {
-  return notionFetch(`/pages/${pageId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ cover: { type: 'external', external: { url: imageUrl } } }),
+async function getPageBlockImageUrl(pageId) {
+  const data  = await notionFetch(`/blocks/${pageId}/children?page_size=20`);
+  const block = (data.results || []).find(b => b.type === 'image');
+  if (!block) return null;
+  return block.image?.file?.url || block.image?.external?.url || null;
+}
+
+// Append an external image as the first block of the page
+// Requires "Insert content" capability on the Notion integration
+async function addImageBlock(pageId, imageUrl) {
+  return notionFetch(`/blocks/${pageId}/children`, {
+    method: 'POST',
+    body: JSON.stringify({
+      children: [{
+        object: 'block',
+        type: 'image',
+        image: { type: 'external', external: { url: imageUrl } },
+      }],
+    }),
   });
 }
 
@@ -226,11 +248,16 @@ async function main() {
     process.stdout.write(`  …  ${name}\r`);
 
     try {
-      // Step 1: page cover already in query response — zero extra API call
+      // Step 1: existing block image on Notion page — free if cover missing
       let imageUrl = getPageCoverUrl(page);
       let source   = 'notion';
 
-      // Step 2: no cover → search BGG (French edition preferred)
+      if (!imageUrl) {
+        await sleep(NOTION_DELAY_MS);
+        imageUrl = await getPageBlockImageUrl(notionId).catch(() => null);
+      }
+
+      // Step 2: no existing image → search BGG (French edition preferred)
       if (!imageUrl && BGG_TOKEN) {
         await sleep(BGG_DELAY_MS);
         imageUrl = await bggFrenchImage(name).catch(e => {
@@ -252,18 +279,18 @@ async function main() {
         continue;
       }
 
-      // Step 3: if found on BGG, set it as the Notion page cover
+      // Step 3: if found on BGG, add it as a content block on the Notion page
       if (source === 'bgg') {
         await sleep(NOTION_DELAY_MS);
-        await setPageCover(notionId, imageUrl).catch(e => {
-          process.stdout.write(`  ⚠  "${name}": cover Notion échoué — ${e.message}\n`);
+        await addImageBlock(notionId, imageUrl).catch(e => {
+          process.stdout.write(`  ⚠  "${name}": bloc Notion échoué — ${e.message}\n`);
         });
       }
 
-      // Step 4: download locally
+      // Step 4: download locally with snake_case filename
       const { buf, contentType } = await downloadImage(imageUrl);
       const ext  = extFromUrlOrType(imageUrl, contentType);
-      const file = `${notionId}${ext}`;
+      const file = `${toSnakeCase(name)}${ext}`;
       fs.writeFileSync(path.join(IMG_DIR, file), Buffer.from(buf));
       manifest[notionId] = file;
 
