@@ -59,6 +59,11 @@ const NOTION_HEADERS = {
 // ── Utilities ────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Wrap a URL through wsrv.nl so Notion accepts it as an external image block
+function wsrvUrl(url) {
+  return `https://wsrv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//, ''))}`;
+}
+
 function toSnakeCase(name) {
   return name
     .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip accents
@@ -248,14 +253,10 @@ async function main() {
     process.stdout.write(`  …  ${name}\r`);
 
     try {
-      // Step 1: existing block image on Notion page — free if cover missing
-      let imageUrl = getPageCoverUrl(page);
+      // Step 1: check for an existing image block on the page
+      await sleep(NOTION_DELAY_MS);
+      let imageUrl = await getPageBlockImageUrl(notionId).catch(() => null);
       let source   = 'notion';
-
-      if (!imageUrl) {
-        await sleep(NOTION_DELAY_MS);
-        imageUrl = await getPageBlockImageUrl(notionId).catch(() => null);
-      }
 
       // Step 2: no existing image → search BGG (French edition preferred)
       if (!imageUrl && BGG_TOKEN) {
@@ -282,7 +283,7 @@ async function main() {
       // Step 3: if found on BGG, add it as a content block on the Notion page
       if (source === 'bgg') {
         await sleep(NOTION_DELAY_MS);
-        await addImageBlock(notionId, imageUrl).catch(e => {
+        await addImageBlock(notionId, wsrvUrl(imageUrl)).catch(e => {
           process.stdout.write(`  ⚠  "${name}": bloc Notion échoué — ${e.message}\n`);
         });
       }
