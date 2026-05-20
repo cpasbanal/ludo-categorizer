@@ -4,18 +4,18 @@
  *
  * For each game in your Notion DB:
  *   1. If the Notion page already has an image block → download it locally
- *   2. Otherwise → search BoardGameGeek (French edition first, then main)
- *   3. BGG fallback → search Philibert (French retailer)
- *   4. Found externally → add image block to the Notion page, download locally
+ *   2. Otherwise → search BoardGameGeek (French edition preferred, main image fallback)
+ *   3. Found externally → add image block to the Notion page, download locally
  *
  * Usage:
- *   node sync-images.js --token=secret_xxx --db=xxxxxxxx
- *   node sync-images.js --token=secret_xxx --db=xxxxxxxx --force  # re-download all
+ *   node sync-images.js --token=secret_xxx --db=xxxxxxxx --bgg-token=yyy
+ *   node sync-images.js --token=secret_xxx --db=xxxxxxxx --bgg-token=yyy --force
  *
- * Or via env vars: NOTION_TOKEN=... NOTION_DB_ID=... node sync-images.js
+ * Or via env vars:
+ *   NOTION_TOKEN=... NOTION_DB_ID=... BGG_TOKEN=... node sync-images.js
  *
  * Requires Node.js 18+ (built-in fetch).
- * First run on 200 games takes ~15 min (BGG rate limit). Subsequent runs are instant.
+ * First run on 200 games ~15 min (BGG rate limit). Subsequent runs are instant.
  * After running: git add images/ && git commit -m "sync: box art" && git push
  */
 
@@ -28,19 +28,24 @@ const ARGS = Object.fromEntries(
     .filter(a => a.startsWith('--'))
     .map(a => { const [k, ...v] = a.slice(2).split('='); return [k, v.join('=')]; })
 );
-const TOKEN = ARGS.token || process.env.NOTION_TOKEN;
-const DB_ID = (ARGS.db   || process.env.NOTION_DB_ID || '').replace(/-/g, '');
-const FORCE = 'force' in ARGS;
+const TOKEN     = ARGS['token']     || process.env.NOTION_TOKEN;
+const DB_ID     = (ARGS['db']       || process.env.NOTION_DB_ID  || '').replace(/-/g, '');
+const BGG_TOKEN = ARGS['bgg-token'] || process.env.BGG_TOKEN;
+const FORCE     = 'force' in ARGS;
 
 if (!TOKEN || !DB_ID) {
-  console.error('Usage: node sync-images.js --token=<notion_token> --db=<database_id> [--force]');
+  console.error('Usage: node sync-images.js --token=<notion_token> --db=<database_id> --bgg-token=<bgg_token> [--force]');
   process.exit(1);
 }
+if (!BGG_TOKEN) {
+  console.warn('⚠  --bgg-token not provided — BGG search disabled, only existing Notion images will be downloaded');
+}
 
-const IMG_DIR       = path.join(__dirname, 'images');
-const NOTION_DELAY  = 400;   // ms between Notion API calls
-const BGG_DELAY     = 2200;  // ms between BGG calls — BGG asks to be polite
-const UA            = 'Mozilla/5.0 (compatible; ludo-sync/2.0; +https://github.com/cpasbanal/ludo-categorizer)';
+const IMG_DIR          = path.join(__dirname, 'images');
+const NOTION_DELAY_MS  = 400;
+const BGG_DELAY_MS     = 2200;  // BGG asks to be polite
+const UA               = 'Mozilla/5.0 (compatible; ludo-sync/2.0)';
+const BGG_FRENCH_LANG  = '2187'; // BGG language ID for French
 
 if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
 
@@ -66,9 +71,9 @@ function extFromUrlOrType(url, contentType) {
   return '.jpg';
 }
 
-async function download(url) {
+async function downloadImage(url) {
   const res = await fetch(url, { headers: { 'User-Agent': UA } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} downloading image`);
   return { buf: await res.arrayBuffer(), contentType: res.headers.get('content-type') || '' };
 }
 
@@ -94,7 +99,7 @@ async function queryAll() {
     const data = await notionFetch(`/databases/${formattedDbId}/query`, { method: 'POST', body: JSON.stringify(body) });
     pages.push(...data.results);
     cursor = data.has_more ? data.next_cursor : null;
-    if (cursor) await sleep(NOTION_DELAY);
+    if (cursor) await sleep(NOTION_DELAY_MS);
   } while (cursor);
   return pages;
 }
@@ -113,102 +118,78 @@ async function addExternalImageBlock(pageId, imageUrl) {
   });
 }
 
-// ── BGG XML parser (no dependency, hand-rolled) ──────────────────────────────
+// ── BGG XML helpers ──────────────────────────────────────────────────────────
 
-// Fetch BGG XML, handling 202 "still processing" with retries
-async function bggFetch(url) {
+// BGG now requires Authorization: Bearer — and redirect:'manual' avoids
+// Node's undici stripping the auth header when following Cloudflare redirects
+async function bggGet(url) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    if (res.status === 202) { await sleep(3500); continue; }
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${BGG_TOKEN}`, 'User-Agent': UA },
+      redirect: 'manual',
+    });
+    if (res.status === 202) { await sleep(3500); continue; } // BGG queued
     if (!res.ok) throw new Error(`BGG HTTP ${res.status}`);
     return res.text();
   }
   throw new Error('BGG: no response after retries');
 }
 
-// Get first attribute value: <tag ... attr="VALUE"
+// First attribute match: <tag … attr="VALUE"
 function xmlAttr(xml, tag, attr) {
   return xml.match(new RegExp(`<${tag}\\b[^>]*\\s${attr}="([^"]*)"`, 'i'))?.[1] ?? null;
 }
 
-// Get text content of a tag, normalising protocol-relative URLs
+// Text content of a tag, normalising protocol-relative URLs
 function xmlText(xml, tag) {
   const v = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)`, 'i'))?.[1]?.trim() ?? '';
   return v.startsWith('//') ? `https:${v}` : v;
 }
 
-// Extract all <item type="boardgameversion"> blocks from the <versions> section
-function bggVersions(xml) {
+// All boardgameversion blocks from inside <versions>…</versions>
+function bggVersionBlocks(xml) {
   const section = xml.match(/<versions>([\s\S]*?)<\/versions>/i)?.[1] ?? '';
   return [...section.matchAll(/<item\b[^>]*type="boardgameversion"[\s\S]*?<\/item>/gi)].map(m => m[0]);
 }
 
-// Extract the main game image (before any <versions> block, to avoid version bleed)
+// Main game image — read from the outer item, before <versions> to avoid bleed
 function bggMainImage(xml) {
-  const beforeVersions = xml.match(/([\s\S]*?)(?:<versions>|$)/i)?.[1] ?? xml;
-  return xmlText(beforeVersions, 'image') || xmlText(beforeVersions, 'thumbnail') || null;
+  const outer = xml.match(/([\s\S]*?)(?:<versions>|$)/i)?.[1] ?? xml;
+  return xmlText(outer, 'image') || xmlText(outer, 'thumbnail') || null;
 }
 
 async function bggFrenchImage(name) {
-  // 1. Exact name search
-  let xml = await bggFetch(
-    `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(name)}&type=boardgame&exact=1`
-  );
+  // 1. Exact search
+  let xml    = await bggGet(`https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(name)}&type=boardgame&exact=1`);
   let gameId = xmlAttr(xml, 'item', 'id');
 
-  // 2. Fuzzy search fallback (first result)
+  // 2. Fuzzy search fallback
   if (!gameId) {
-    await sleep(BGG_DELAY);
-    xml    = await bggFetch(`https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(name)}&type=boardgame`);
+    await sleep(BGG_DELAY_MS);
+    xml    = await bggGet(`https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(name)}&type=boardgame`);
     gameId = xmlAttr(xml, 'item', 'id');
   }
   if (!gameId) return null;
 
-  // 3. Fetch game details + all versions
-  await sleep(BGG_DELAY);
-  xml = await bggFetch(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&versions=1`);
+  // 3. Game details + all versions
+  await sleep(BGG_DELAY_MS);
+  xml = await bggGet(`https://boardgamegeek.com/xmlapi2/thing?id=${gameId}&versions=1`);
 
-  // 4. Find a French-language version
-  //    BGG language link: <link type="language" id="2193" value="Français"/>
-  //    id 2193 = French in BGG's taxonomy
-  const frenchVersion = bggVersions(xml).find(v =>
-    v.includes('"2193"') ||               // reliable: BGG language ID for French
-    /value="[Ff]ran[çc]ais"/.test(v) ||   // French name variant
-    /value="[Ff]rench"/.test(v)            // English name variant
+  // 4. Find French edition
+  //    BGG language ID 2187 = French; value="French" in the link tag
+  const frVersion = bggVersionBlocks(xml).find(v =>
+    new RegExp(`<link[^>]*type="language"[^>]*id="${BGG_FRENCH_LANG}"`).test(v) ||
+    /<link[^>]*type="language"[^>]*value="French"/.test(v)
   );
 
-  if (frenchVersion) {
-    const img = xmlText(frenchVersion, 'image') || xmlText(frenchVersion, 'thumbnail');
+  if (frVersion) {
+    const img = xmlText(frVersion, 'image') || xmlText(frVersion, 'thumbnail');
     if (img) return img;
+    // French version exists but has no image — fall through to main image
   }
 
-  // 5. Fall back to the main game image
+  // 5. Main game image fallback
   return bggMainImage(xml);
-}
-
-// ── Philibert scraper ────────────────────────────────────────────────────────
-async function philibertImage(name) {
-  try {
-    const res = await fetch(
-      `https://www.philibert.fr/index.php?controller=search&s=${encodeURIComponent(name)}`,
-      { headers: { 'User-Agent': UA, 'Accept': 'text/html', 'Accept-Language': 'fr-FR,fr;q=0.9' } }
-    );
-    if (!res.ok) return null;
-    const html = await res.text();
-
-    // Try multiple CSS patterns — Philibert's PrestaShop theme evolves
-    const patterns = [
-      /data-full-size-image-url="(https?:\/\/[^"]+philibert[^"]+)"/i,
-      /<img\b[^>]+class="[^"]*product[^"]*"[^>]+src="(https?:\/\/[^"]+)"/i,
-      /<article\b[^>]*class="[^"]*product[^>]*>[\s\S]{0,600}?<img\b[^>]+src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp))(?:[^"]*)?"/i,
-      /<img\b[^>]+src="(https?:\/\/(?:www\.)?philibert\.fr\/img\/[^"]+)"/i,
-    ];
-    for (const re of patterns) {
-      const m = html.match(re);
-      if (m?.[1]) return m[1];
-    }
-    return null;
-  } catch(_) { return null; }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -221,7 +202,7 @@ async function main() {
   let manifest = {};
   try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch(_) {}
 
-  let nNotion = 0, nBgg = 0, nPhilibert = 0, nSkipped = 0, nNoImg = 0, nFailed = 0;
+  let nNotion = 0, nBgg = 0, nSkipped = 0, nNoImg = 0, nFailed = 0;
 
   for (const page of pages) {
     const notionId = page.id;
@@ -237,23 +218,20 @@ async function main() {
     process.stdout.write(`  …  ${name}\r`);
 
     try {
-      await sleep(NOTION_DELAY);
+      await sleep(NOTION_DELAY_MS);
 
-      // ── Step 1: existing Notion image block?
+      // Step 1: existing Notion image block?
       let imageUrl = await getPageImageUrl(notionId);
       let source   = 'notion';
 
-      // ── Step 2: no Notion image → BGG (French edition preferred)
-      if (!imageUrl) {
-        await sleep(BGG_DELAY);
-        imageUrl = await bggFrenchImage(name).catch(() => null);
-        source   = 'bgg';
-      }
-
-      // ── Step 3: BGG failed → Philibert
-      if (!imageUrl) {
-        imageUrl = await philibertImage(name).catch(() => null);
-        source   = 'philibert';
+      // Step 2: no Notion image → BGG
+      if (!imageUrl && BGG_TOKEN) {
+        await sleep(BGG_DELAY_MS);
+        imageUrl = await bggFrenchImage(name).catch(e => {
+          process.stdout.write(`  ⚠  BGG error for "${name}": ${e.message}\n`);
+          return null;
+        });
+        source = 'bgg';
       }
 
       if (!imageUrl) {
@@ -262,26 +240,24 @@ async function main() {
         continue;
       }
 
-      // ── Step 4: if found externally, add block to Notion page
-      if (source !== 'notion') {
-        await sleep(NOTION_DELAY);
+      // Step 3: if found on BGG, add external block to Notion page
+      if (source === 'bgg') {
+        await sleep(NOTION_DELAY_MS);
         await addExternalImageBlock(notionId, imageUrl).catch(e => {
-          process.stdout.write(`  ⚠  ${name}: ajout Notion échoué (${e.message})\n`);
+          process.stdout.write(`  ⚠  "${name}": ajout Notion échoué — ${e.message}\n`);
         });
       }
 
-      // ── Step 5: download image locally
-      const { buf, contentType } = await download(imageUrl);
+      // Step 4: download locally
+      const { buf, contentType } = await downloadImage(imageUrl);
       const ext  = extFromUrlOrType(imageUrl, contentType);
       const file = `${notionId}${ext}`;
       fs.writeFileSync(path.join(IMG_DIR, file), Buffer.from(buf));
       manifest[notionId] = file;
 
-      const tag = { notion: '🗂 Notion', bgg: '🎲 BGG', philibert: '🏪 Philibert' }[source];
+      const tag = source === 'bgg' ? '🎲 BGG' : '🗂 Notion';
       process.stdout.write(`  ✓  ${name}  ${tag}\n`);
-      if (source === 'notion')    nNotion++;
-      if (source === 'bgg')       nBgg++;
-      if (source === 'philibert') nPhilibert++;
+      if (source === 'bgg') nBgg++; else nNotion++;
 
     } catch(e) {
       nFailed++;
@@ -291,8 +267,8 @@ async function main() {
 
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  const total = nNotion + nBgg + nPhilibert;
-  console.log(`\n✅ ${total} téléchargées  (🗂 Notion: ${nNotion}  🎲 BGG: ${nBgg}  🏪 Philibert: ${nPhilibert})`);
+  const total = nNotion + nBgg;
+  console.log(`\n✅ ${total} téléchargées  (🗂 Notion: ${nNotion}  🎲 BGG: ${nBgg})`);
   console.log(`   ⏭ ${nSkipped} déjà présentes  —  ${nNoImg} sans image  ✗ ${nFailed} en erreur`);
   console.log(`📄 Manifest: images/manifest.json  (${Object.keys(manifest).length} entrées)\n`);
   console.log(`Prochaine étape:`);
