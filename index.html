@@ -1668,29 +1668,33 @@ const OWNER_PALETTE = [
   { color: '#00695C', bg: '#E0F2F1', border: '#80CBC4' },
 ];
 const DEFAULT_OWNERS = [];
-let ownersList = [...DEFAULT_OWNERS];
+let ownersList = [];
+let _ownersByKey = new Map();   // key → { owner, index } — rebuilt by _rebuildOwnerMap
+let _ownersByLabel = new Map(); // label.toLowerCase() → key
+
+function _rebuildOwnerMap() {
+  _ownersByKey   = new Map(ownersList.map((o, i) => [o.key, { owner: o, index: i }]));
+  _ownersByLabel = new Map(ownersList.map(o => [o.label.toLowerCase(), o.key]));
+}
 
 function ownerPalette(idx) { return OWNER_PALETTE[idx % OWNER_PALETTE.length]; }
 function toCssToken(key) { return key.replace(/\s+/g, '_'); }
-function isValidOwner(key) { return !!resolveOwnerKey(key); }
 function resolveOwnerKey(nameOrKey) {
-  const o = ownersList.find(o =>
-    o.key === nameOrKey ||
-    o.label.toLowerCase() === nameOrKey.toLowerCase()
-  );
-  return o ? o.key : null;
+  return _ownersByKey.has(nameOrKey) ? nameOrKey : (_ownersByLabel.get(nameOrKey.toLowerCase()) ?? null);
 }
+function isValidOwner(key) { return _ownersByKey.has(key); }
 function getOwnerData(key) {
-  const i = ownersList.findIndex(o => o.key === key);
-  if (i < 0) return null;
-  return { ...ownersList[i], ...ownerPalette(i) };
+  const entry = _ownersByKey.get(key);
+  if (!entry) return null;
+  return { ...entry.owner, ...ownerPalette(entry.index) };
 }
 function saveOwners() { localStorage.setItem('ludo_owners', JSON.stringify(ownersList)); }
 function loadOwners() {
   try {
     const stored = JSON.parse(localStorage.getItem('ludo_owners'));
-    ownersList = stored?.length ? stored : [...DEFAULT_OWNERS];
-  } catch(_) { ownersList = [...DEFAULT_OWNERS]; }
+    ownersList = stored?.length ? stored : [];
+  } catch(_) { ownersList = []; }
+  _rebuildOwnerMap();
 }
 function injectOwnerStyles() {
   const css = ownersList.map((o, i) => {
@@ -1712,9 +1716,8 @@ function renderOwnerChecks(containerId) {
 }
 
 function normalizeOwner(owner) {
-  if (Array.isArray(owner)) return owner.filter(o => isValidOwner(o) || o === 'JM');
-  if (owner === 'JM') return ['J', 'M'].filter(isValidOwner);
-  return isValidOwner(owner) ? [owner] : (ownersList.length ? [ownersList[0].key] : []);
+  if (Array.isArray(owner)) return owner.filter(isValidOwner);
+  return isValidOwner(owner) ? [owner] : [];
 }
 
 const DEFAULT_CATEGORIES = [
@@ -2028,6 +2031,7 @@ async function syncOwnersFromNotion() {
       }
     }
     if (added) {
+      _rebuildOwnerMap();
       saveOwners();
       refreshOwnerUI();
       dbg(`${added} nouveau(x) propriétaire(s) importé(s) depuis Notion`, 'ok');
@@ -3681,8 +3685,8 @@ function startEditOwner(key) {
 function saveOwnerLabel(key) {
   const val = document.getElementById('owner-label-edit')?.value.trim();
   if (!val) { toast('Nom requis', 'warn'); return; }
-  const o = ownersList.find(x => x.key === key);
-  if (o) o.label = val;
+  const o = _ownersByKey.get(key)?.owner;
+  if (o) { o.label = val; _rebuildOwnerMap(); }
   editingOwnerKey = null;
   refreshOwnerUI();
 }
@@ -3709,8 +3713,9 @@ function addOwner() {
   const label = document.getElementById('new-owner-label').value.trim();
   if (!key)   { toast('Code requis', 'warn'); return; }
   if (!label) { toast('Nom requis', 'warn'); return; }
-  if (ownersList.find(o => o.key === key)) { toast('Ce code existe déjà', 'warn'); return; }
+  if (_ownersByKey.has(key)) { toast('Ce code existe déjà', 'warn'); return; }
   ownersList.push({ key, label, icon, hidden: false });
+  _rebuildOwnerMap();
   saveOwners();
   refreshOwnerUI();
   document.getElementById('new-owner-icon').value = '👤';
@@ -3722,9 +3727,10 @@ function addOwner() {
 
 function applyOwnerIconChange(key) {
   const newIcon = document.getElementById(`owner-icon-${key}`)?.value || '👤';
-  const o = ownersList.find(x => x.key === key);
+  const o = _ownersByKey.get(key)?.owner;
   if (!o) return;
   o.icon = newIcon;
+  _rebuildOwnerMap();
   saveOwners();
   refreshOwnerUI();
 }
@@ -3734,6 +3740,7 @@ function removeOwner(key) {
   const inUse = state.games.filter(g => normalizeOwner(g.owner).includes(key)).length;
   if (inUse && !confirm(`${inUse} jeu(x) ont ce propriétaire. Supprimer quand même ?`)) return;
   ownersList = ownersList.filter(o => o.key !== key);
+  _rebuildOwnerMap();
   saveOwners();
   refreshOwnerUI();
   toast('Propriétaire supprimé', 'info');
