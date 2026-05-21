@@ -1711,12 +1711,36 @@ function migrateOldData() {
 function loadCategories() {
   const s = localStorage.getItem('ludo_cats');
   if (s) { try { state.categories = JSON.parse(s); } catch(e) {} }
-  else { DEFAULT_CATEGORIES.forEach(c => addCategoryData(c)); saveCategories(); }
+  // If Notion is configured, defer category creation to syncBidirectional (imports from DB schema)
+  if (!state.categories.length && !(settings.notionToken && settings.notionDbId)) {
+    DEFAULT_CATEGORIES.forEach(c => addCategoryData(c));
+    saveCategories();
+  }
   if (state.categories.length) state.nextCatId = Math.max(...state.categories.map(c => c.id)) + 1;
 }
 
 function saveCategories() {
   localStorage.setItem('ludo_cats', JSON.stringify(state.categories));
+}
+
+async function importCategoriesFromNotion() {
+  if (!notion?.m.propCategorie) return false;
+  try {
+    const db   = await notion._req(`/databases/${notion.dbId}`);
+    const prop = db.properties?.[notion.m.propCategorie];
+    if (prop?.type !== 'select') return false;
+    const opts = prop.select?.options || [];
+    if (!opts.length) return false;
+    state.categories = [];
+    state.nextCatId  = 1;
+    for (const opt of opts) addCategoryData({ name: opt.name, emoji: '🎲', desc: '' });
+    saveCategories();
+    dbg(`${opts.length} catégories importées depuis Notion`, 'ok');
+    return true;
+  } catch(e) {
+    dbg('Import catégories Notion échoué : ' + e.message, 'warn');
+    return false;
+  }
 }
 
 // ============================
@@ -1727,6 +1751,15 @@ async function syncBidirectional() {
   dbg('syncBidirectional() démarré');
   try {
     await syncOwnersFromNotion();
+
+    // First load: build category list from Notion's select options before mapping games
+    if (!state.categories.length) {
+      const imported = await importCategoriesFromNotion();
+      if (!imported) { DEFAULT_CATEGORIES.forEach(c => addCategoryData(c)); saveCategories(); }
+      populateCategorySelects();
+      renderCatFilters();
+    }
+
     const notionPages = await notion.queryAll();
     const notionGames = notionPagesToGames(notionPages);
 
