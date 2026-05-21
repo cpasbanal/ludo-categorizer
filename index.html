@@ -869,10 +869,12 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="page-title">Que la partie commence</div>
         </div>
         <div class="topbar-actions">
+          <span id="visual-selected-count" style="font-size:0.85rem;font-weight:600;color:var(--green-dark);"></span>
           <span id="visual-loading-msg" style="font-size:0.8rem;color:var(--muted);display:none;">⏳ Chargement des images…</span>
         </div>
       </div>
       <div style="padding:24px;">
+        <div class="filter-row" id="visual-owner-filters" style="margin-bottom:20px;"></div>
         <div id="visual-library-section" class="visual-library-section">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
             <span style="font-size:1.1rem;">🎲</span>
@@ -1703,8 +1705,9 @@ const DEFAULT_CATEGORIES = [
 
 let csvParsedData = [];
 let currentKeywords = [];
-let activeOwnerFilter = 'all';
-let activeCatFilter   = 'all';
+let activeOwnerFilter       = 'all';
+let activeVisualOwnerFilter = 'all';
+let activeCatFilter         = 'all';
 let showHiddenGames   = false;
 let sortField = 'name';
 let sortDir   = 'asc';
@@ -2918,7 +2921,6 @@ function renderCatGrid() {
                   ondragstart="catCardDragStart(event,${cat.id})"
                   ondragend="catCardDragEnd(event)">⠿</span>
             <div class="cat-card-title">
-              <span class="cat-emoji">${cat.emoji}</span>
               ${escHtml(cat.name)}
             </div>
           </div>
@@ -3159,25 +3161,53 @@ function thumbHtml(g, mode = 'selected') {
   </div>`;
 }
 
+function renderVisualOwnerFilters() {
+  const row = document.getElementById('visual-owner-filters');
+  if (!row) return;
+  const visible = ownersList.filter(o => !o.hidden);
+  if (activeVisualOwnerFilter !== 'all' && !visible.find(o => o.key === activeVisualOwnerFilter)) {
+    activeVisualOwnerFilter = 'all';
+  }
+  row.innerHTML = `<span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Propriétaire :</span>
+    <button class="filter-chip owner-chip ${activeVisualOwnerFilter === 'all' ? 'active' : ''}" onclick="setVisualOwnerFilter('all',this)">Tous</button>
+    ${visible.map(o => `<button class="filter-chip owner-chip ${activeVisualOwnerFilter === o.key ? 'active' : ''}" onclick="setVisualOwnerFilter('${o.key}',this)">${o.icon} ${escHtml(o.label)}</button>`).join('')}
+  `;
+}
+
+function setVisualOwnerFilter(val, el) {
+  activeVisualOwnerFilter = val;
+  document.querySelectorAll('#visual-owner-filters .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderVisualGrid();
+}
+
 function renderVisualGrid() {
   visualGeneration++;
   const gen = visualGeneration;
   const grid = document.getElementById('visual-grid');
   if (!grid) return;
 
+  renderVisualOwnerFilters();
+
+  const ownerMatch = g => activeVisualOwnerFilter === 'all' || normalizeOwner(g.owner).includes(activeVisualOwnerFilter);
+
   // Ma ludothèque: games NOT in visual selection
   const libraryGames = state.games
-    .filter(g => !g.hidden && isGameVisible(g) && !(g.selection || []).includes(VISUAL_SELECTION))
+    .filter(g => !g.hidden && isGameVisible(g) && ownerMatch(g) && !(g.selection || []).includes(VISUAL_SELECTION))
     .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   const libBadge  = document.getElementById('visual-library-badge');
   const libThumbs = document.getElementById('visual-library-thumbs');
   if (libBadge)  libBadge.textContent = libraryGames.length;
   if (libThumbs) libThumbs.innerHTML  = libraryGames.map(g => thumbHtml(g, 'library')).join('');
 
+  const selectedTotal = state.games.filter(g => !g.hidden && isGameVisible(g) && ownerMatch(g) && (g.selection || []).includes(VISUAL_SELECTION)).length;
+  const countEl = document.getElementById('visual-selected-count');
+  if (countEl) countEl.textContent = selectedTotal ? `${selectedTotal} jeu${selectedTotal > 1 ? 'x' : ''} sélectionné${selectedTotal > 1 ? 's' : ''}` : '';
+
   // Category sections: games IN visual selection
   grid.innerHTML = state.categories.map(cat => {
     const games = state.games
-      .filter(g => g.catId === cat.id && !g.hidden && isGameVisible(g) && (g.selection || []).includes(VISUAL_SELECTION))
+      .filter(g => g.catId === cat.id && !g.hidden && isGameVisible(g) && ownerMatch(g) && (g.selection || []).includes(VISUAL_SELECTION))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
     const thumbs = games.length === 0
       ? '<span class="cat-empty">Aucun jeu sélectionné</span>'
