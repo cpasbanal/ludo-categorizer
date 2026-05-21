@@ -2132,7 +2132,7 @@ async function saveSettingsAndSync() {
 
   if (token && dbId) {
     notion = new NotionAPI(token, dbId, buildMapping());
-    await refreshFromNotion();
+    await syncBidirectional();
     renderGamesTable(); renderCatGrid(); renderDashboard(); updateSidebarStats();
   } else {
     notion = null;
