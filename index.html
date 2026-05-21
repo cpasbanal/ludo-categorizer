@@ -1740,9 +1740,10 @@ async function syncBidirectional() {
     const merged = notionGames.map(ng => {
       const local = localByNotionId.get(ng.notionId);
       if (!local) return { ...ng, id: nextId++ };
-      // Local category wins: if local has a category set that Notion doesn't reflect, keep it and push later
+      // Local category wins: if local has a category that Notion doesn't reflect, keep it and push later
       const catId = local.catId != null ? local.catId : ng.catId;
-      if (local.catId != null && local.catId !== ng.catId) {
+      // Compare against notionCatId (what Notion actually has), not the detectCategory fallback
+      if (local.catId != null && local.catId !== ng.notionCatId) {
         categoryMismatches.push({ ...ng, id: local.id, catId });
       }
       return { ...ng, id: local.id, catId };
@@ -1888,9 +1889,10 @@ function notionPagesToGames(pages) {
       owners = ownersList.length ? [ownersList[0].key] : [];
     }
 
-    const catName = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
-    const cat     = state.categories.find(c => c.name === catName);
-    const catId   = cat ? cat.id : detectCategory(name);
+    const catName   = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
+    const cat       = state.categories.find(c => c.name === catName);
+    const notionCatId = cat?.id ?? null; // what Notion actually has (null = not set / unrecognised)
+    const catId       = notionCatId !== null ? notionCatId : detectCategory(name);
 
     // Players: prefer "Joueurs min" / "Joueurs max" number fields (from BGG sync), fallback to text field
     let players = m.propJoueurs ? (props[m.propJoueurs]?.rich_text || []).map(t => t.plain_text).join('') : '';
@@ -1905,7 +1907,7 @@ function notionPagesToGames(pages) {
     const selection   = m.propSelection   ? (props[m.propSelection]?.multi_select || []).map(o => o.name) : [];
     const coverUrl    = page.cover?.external?.url || page.cover?.file?.url || '';
 
-    return { id: id++, name, owner: owners, catId, players, duration, description, hidden, selection, coverUrl, notionId: page.id };
+    return { id: id++, name, owner: owners, catId, notionCatId, players, duration, description, hidden, selection, coverUrl, notionId: page.id };
   }).filter(Boolean);
 
   const hiddenCount = games.filter(g => g.hidden).length;
