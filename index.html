@@ -1557,7 +1557,7 @@ class NotionAPI {
     const pages = [];
     let cursor = null;
     do {
-      const body = { page_size: 100, filter_properties: [] };
+      const body = { page_size: 100 };
       if (cursor) body.start_cursor = cursor;
       const data = await this._req(`/databases/${this.dbId}/query`, { method: 'POST', body: JSON.stringify(body) });
       pages.push(...data.results.map(p => ({ id: p.id, last_edited_time: p.last_edited_time })));
