@@ -1553,6 +1553,35 @@ class NotionAPI {
     return pages;
   }
 
+  async queryAllIds() {
+    const pages = [];
+    let cursor = null;
+    do {
+      const body = { page_size: 100, filter_properties: [] };
+      if (cursor) body.start_cursor = cursor;
+      const data = await this._req(`/databases/${this.dbId}/query`, { method: 'POST', body: JSON.stringify(body) });
+      pages.push(...data.results.map(p => ({ id: p.id, last_edited_time: p.last_edited_time })));
+      cursor = data.has_more ? data.next_cursor : null;
+    } while (cursor);
+    return pages;
+  }
+
+  async queryChangedSince(isoTimestamp) {
+    const pages = [];
+    let cursor = null;
+    do {
+      const body = {
+        page_size: 100,
+        filter: { timestamp: 'last_edited_time', last_edited_time: { after: isoTimestamp } },
+      };
+      if (cursor) body.start_cursor = cursor;
+      const data = await this._req(`/databases/${this.dbId}/query`, { method: 'POST', body: JSON.stringify(body) });
+      pages.push(...data.results);
+      cursor = data.has_more ? data.next_cursor : null;
+    } while (cursor);
+    return pages;
+  }
+
   async create(game, catName) {
     return this._req('/pages', {
       method: 'POST',
@@ -1815,39 +1844,88 @@ async function syncBidirectional() {
       renderCatFilters();
     }
 
-    const notionPages = await notion.queryAll();
+    const lastSyncISO = localStorage.getItem('ludo_last_sync_iso');
+    const isFirstSync = !lastSyncISO || !state.games.some(g => g.notionId);
+
+    let notionPages;
+    let deletedCount = 0;
+
+    if (isFirstSync) {
+      dbg('Sync complet (premier chargement)');
+      notionPages = await notion.queryAll();
+    } else {
+      dbg(`Sync différentiel depuis ${lastSyncISO}`);
+
+      // Phase 1: lightweight fetch of all page IDs to detect deletions
+      const allSummaries = await notion.queryAllIds();
+      const notionIdSet = new Set(allSummaries.map(p => p.id));
+      const deletedNotionIds = new Set(
+        state.games.filter(g => g.notionId && !notionIdSet.has(g.notionId)).map(g => g.notionId)
+      );
+      if (deletedNotionIds.size) {
+        state.games = state.games.filter(g => !g.notionId || !deletedNotionIds.has(g.notionId));
+        deletedCount = deletedNotionIds.size;
+      }
+
+      // Phase 2: full data only for pages changed since last sync
+      notionPages = await notion.queryChangedSince(lastSyncISO);
+      dbg(`${notionPages.length} page(s) modifiée(s), ${deletedCount} supprimée(s)`);
+    }
+
     const notionGames = notionPagesToGames(notionPages);
 
     // Build lookup maps
     const localByNotionId = new Map(state.games.filter(g => g.notionId).map(g => [g.notionId, g]));
     const unsynced = state.games.filter(g => !g.notionId);
-
-    // Notion-side games: Notion wins for data, preserve local IDs and local category
     let nextId = state.games.length ? Math.max(...state.games.map(g => g.id), 0) + 1 : 1;
     const categoryMismatches = [];
-    const merged = notionGames.map(ng => {
-      const local = localByNotionId.get(ng.notionId);
-      if (!local) return { ...ng, id: nextId++ };
-      // Local category wins: if local has a category that Notion doesn't reflect, keep it and push later
-      const catId = local.catId != null ? local.catId : ng.catId;
-      // Compare against notionCatId (what Notion actually has), not the detectCategory fallback
-      if (local.catId != null && local.catId !== ng.notionCatId) {
-        categoryMismatches.push({ ...ng, id: local.id, catId });
-      }
-      return { ...ng, id: local.id, catId };
-    });
 
-    // Push local-only games to Notion
-    let pushed = 0;
-    for (const g of unsynced) {
-      try {
-        const page = await notion.create(g, getCatById(g.catId)?.name || '');
-        g.notionId = page.id;
-        pushed++;
-      } catch(e) {
-        console.warn('[Notion] Failed to push local game:', g.name, e.message);
+    if (isFirstSync) {
+      // Full replace: Notion wins for all data, preserve local IDs and local category
+      const merged = notionGames.map(ng => {
+        const local = localByNotionId.get(ng.notionId);
+        if (!local) return { ...ng, id: nextId++ };
+        const catId = local.catId != null ? local.catId : ng.catId;
+        if (local.catId != null && local.catId !== ng.notionCatId) {
+          categoryMismatches.push({ ...ng, id: local.id, catId });
+        }
+        return { ...ng, id: local.id, catId };
+      });
+      let pushed = 0;
+      for (const g of unsynced) {
+        try {
+          const page = await notion.create(g, getCatById(g.catId)?.name || '');
+          g.notionId = page.id;
+          pushed++;
+        } catch(e) { console.warn('[Notion] Failed to push local game:', g.name, e.message); }
+        merged.push({ ...g, id: g.id || nextId++ });
       }
-      merged.push({ ...g, id: g.id || nextId++ });
+      state.games = merged;
+      var pushed_ = pushed;
+    } else {
+      // Incremental: update only changed/new games, keep the rest untouched
+      for (const ng of notionGames) {
+        const local = localByNotionId.get(ng.notionId);
+        if (!local) {
+          state.games.push({ ...ng, id: nextId++ });
+        } else {
+          const catId = local.catId != null ? local.catId : ng.catId;
+          if (local.catId != null && local.catId !== ng.notionCatId) {
+            categoryMismatches.push({ ...ng, id: local.id, catId });
+          }
+          const idx = state.games.findIndex(g => g.id === local.id);
+          if (idx >= 0) state.games[idx] = { ...ng, id: local.id, catId };
+        }
+      }
+      let pushed = 0;
+      for (const g of unsynced) {
+        try {
+          const page = await notion.create(g, getCatById(g.catId)?.name || '');
+          g.notionId = page.id;
+          pushed++;
+        } catch(e) { console.warn('[Notion] Failed to push local game:', g.name, e.message); }
+      }
+      var pushed_ = pushed;
     }
 
     // Push category mismatches to Notion (local category wins)
@@ -1861,14 +1939,20 @@ async function syncBidirectional() {
       }
     }
 
-    state.games = merged;
-    state.nextGameId = merged.length ? Math.max(...merged.map(g => g.id)) + 1 : 1;
+    state.nextGameId = state.games.length ? Math.max(...state.games.map(g => g.id)) + 1 : 1;
     saveGamesLocal();
+    const nowISO = new Date().toISOString();
     localStorage.setItem('ludo_last_sync', String(Date.now()));
+    localStorage.setItem('ludo_last_sync_iso', nowISO);
     connStatus = 'ok';
-    const msg = `Sync OK : ${notionGames.length} depuis Notion`
-      + (pushed    ? `, ${pushed} jeu(x) envoyé(s)`           : '')
-      + (catPushed ? `, ${catPushed} catégorie(s) mise(s) à jour` : '');
+    const msg = isFirstSync
+      ? `Sync OK : ${notionGames.length} jeux depuis Notion`
+        + (pushed_    ? `, ${pushed_} jeu(x) envoyé(s)`              : '')
+        + (catPushed  ? `, ${catPushed} catégorie(s) mise(s) à jour` : '')
+      : `Sync diff : ${notionGames.length} modif(s) Notion`
+        + (deletedCount ? `, ${deletedCount} supprimé(s)`            : '')
+        + (pushed_      ? `, ${pushed_} jeu(x) envoyé(s)`           : '')
+        + (catPushed    ? `, ${catPushed} catégorie(s) mise(s) à jour` : '');
     dbg(msg, 'ok');
     toast(msg, 'success');
   } catch(e) {
@@ -3200,7 +3284,11 @@ function renderVisualGrid() {
   if (libBadge)  libBadge.textContent = libraryGames.length;
   if (libThumbs) libThumbs.innerHTML  = libraryGames.map(g => thumbHtml(g, 'library')).join('');
 
-  const selectedTotal = state.games.filter(g => !g.hidden && isGameVisible(g) && ownerMatch(g) && (g.selection || []).includes(VISUAL_SELECTION)).length;
+  const catIds = new Set(state.categories.map(c => c.id));
+  const selectedTotal = state.games.filter(g =>
+    !g.hidden && isGameVisible(g) && ownerMatch(g) &&
+    (g.selection || []).includes(VISUAL_SELECTION) && catIds.has(g.catId)
+  ).length;
   const countEl = document.getElementById('visual-selected-count');
   if (countEl) countEl.textContent = selectedTotal ? `${selectedTotal} jeu${selectedTotal > 1 ? 'x' : ''} sélectionné${selectedTotal > 1 ? 's' : ''}` : '';
 
