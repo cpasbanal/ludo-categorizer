@@ -689,7 +689,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         <span class="nav-icon">⊟</span> Catégories
       </div>
       <div class="nav-item" onclick="showPage('visual')">
-        <span class="nav-icon">🖼</span> Jeux sans limite
+        <span class="nav-icon">🖼</span> Que la partie commence
       </div>
       <div class="nav-section">Ajouter</div>
       <div class="nav-item" onclick="showPage('import')">
@@ -828,7 +828,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
       <div class="topbar">
         <div class="topbar-left">
           <button class="hamburger" onclick="openSidebar()">☰</button>
-          <div class="page-title">Jeux sans limite</div>
+          <div class="page-title">Que la partie commence</div>
         </div>
         <div class="topbar-actions">
           <span id="visual-loading-msg" style="font-size:0.8rem;color:var(--muted);display:none;">⏳ Chargement des images…</span>
@@ -2958,9 +2958,9 @@ async function catDrop(e, catId) {
 }
 
 // ============================
-// VISUAL GRID (Jeux sans limite)
+// VISUAL GRID (Que la partie commence)
 // ============================
-const VISUAL_SELECTION = 'Jeux sans limite';
+const VISUAL_SELECTION = 'Que la partie commence';
 const IMAGE_CACHE_TTL  = 50 * 60 * 1000; // 50 min — Notion URLs expire in ~60 min
 
 const imageCache = new Map(); // notionId → { url, fetchedAt }
