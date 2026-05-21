@@ -1667,11 +1667,7 @@ const OWNER_PALETTE = [
   { color: '#C62828', bg: '#FFEBEE', border: '#FFCDD2' },
   { color: '#00695C', bg: '#E0F2F1', border: '#80CBC4' },
 ];
-const DEFAULT_OWNERS = [
-  { key: 'J',  label: 'Joueur 1',         icon: '👤', hidden: false },
-  { key: 'M',  label: 'Joueur 2',         icon: '👤', hidden: false },
-  { key: 'FR', label: 'Familles Rurales', icon: '🏠', hidden: false },
-];
+const DEFAULT_OWNERS = [];
 let ownersList = [...DEFAULT_OWNERS];
 
 function ownerPalette(idx) { return OWNER_PALETTE[idx % OWNER_PALETTE.length]; }
