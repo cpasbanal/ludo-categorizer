@@ -1817,7 +1817,10 @@ async function importCategoriesFromNotion() {
     if (!opts.length) return false;
     state.categories = [];
     state.nextCatId  = 1;
-    for (const opt of opts) addCategoryData({ name: opt.name, emoji: '🎲', desc: '' });
+    for (const opt of opts) {
+      const { emoji, name } = parseEmojiPrefix(opt.name);
+      addCategoryData({ name: name || opt.name, emoji: emoji || '🎲', desc: '' });
+    }
     saveCategories();
     dbg(`${opts.length} catégories importées depuis Notion`, 'ok');
     return true;
@@ -1894,7 +1897,7 @@ async function syncBidirectional() {
       let pushed = 0;
       for (const g of unsynced) {
         try {
-          const page = await notion.create(g, getCatById(g.catId)?.name || '');
+          const page = await notion.create(g, catNotionName(getCatById(g.catId)));
           g.notionId = page.id;
           pushed++;
         } catch(e) { console.warn('[Notion] Failed to push local game:', g.name, e.message); }
@@ -1920,7 +1923,7 @@ async function syncBidirectional() {
       let pushed = 0;
       for (const g of unsynced) {
         try {
-          const page = await notion.create(g, getCatById(g.catId)?.name || '');
+          const page = await notion.create(g, catNotionName(getCatById(g.catId)));
           g.notionId = page.id;
           pushed++;
         } catch(e) { console.warn('[Notion] Failed to push local game:', g.name, e.message); }
@@ -1932,7 +1935,7 @@ async function syncBidirectional() {
     let catPushed = 0;
     for (const g of categoryMismatches) {
       try {
-        await notion.updateCategory(g.notionId, getCatById(g.catId)?.name || '');
+        await notion.updateCategory(g.notionId, catNotionName(getCatById(g.catId)));
         catPushed++;
       } catch(e) {
         dbg(`Catégorie non poussée pour "${g.name}" : ${e.message}`, 'warn');
@@ -2062,7 +2065,7 @@ function notionPagesToGames(pages) {
     }
 
     const catName   = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
-    const cat       = state.categories.find(c => c.name === catName);
+    const cat       = state.categories.find(c => catNotionName(c) === catName || c.name === catName);
     const notionCatId = cat?.id ?? null; // what Notion actually has (null = not set / unrecognised)
     const catId       = notionCatId !== null ? notionCatId : detectCategory(name);
 
@@ -2099,7 +2102,7 @@ async function syncNewGamesToNotion() {
   let count = 0;
   for (const g of unsynced) {
     try {
-      const catName = getCatById(g.catId)?.name || '';
+      const catName = catNotionName(getCatById(g.catId));
       const page    = await notion.create(g, catName);
       g.notionId    = page.id;
       count++;
@@ -2395,10 +2398,24 @@ function ownerBadgeHtml(owner) {
     }).join(' ');
 }
 
+// Returns the canonical name used in Notion (emoji + name).
+// Handles both storage formats: emoji embedded in name (old imports) or emoji stored separately.
+function parseEmojiPrefix(str) {
+  const m = str.match(/^(\S+)\s+(.+)$/u);
+  if (!m || /[\p{L}\p{N}]/u.test(m[1])) return { emoji: '', name: str };
+  return { emoji: m[1], name: m[2] };
+}
+function catNotionName(cat) {
+  if (!cat) return '';
+  if (parseEmojiPrefix(cat.name).emoji) return cat.name; // emoji already in name
+  if (cat.emoji && cat.emoji !== '🎲') return `${cat.emoji} ${cat.name}`;
+  return cat.name;
+}
+
 function catChipHtml(catId) {
   const cat = getCatById(catId);
   if (!cat) return '<span class="cat-chip uncategorized">Non catégorisé</span>';
-  return `<span class="cat-chip">${cat.emoji} ${cat.name}</span>`;
+  return `<span class="cat-chip">${escHtml(catNotionName(cat))}</span>`;
 }
 
 // ============================
@@ -2449,7 +2466,7 @@ function autoDetectCategory() {
   const sel = document.getElementById('game-cat-input');
   if (catId) {
     const cat = getCatById(catId);
-    document.getElementById('auto-cat-name').textContent = cat.emoji + ' ' + cat.name;
+    document.getElementById('auto-cat-name').textContent = catNotionName(cat);
     document.getElementById('auto-cat-preview').style.display = 'block';
     sel.value = catId;
   } else {
@@ -2475,7 +2492,7 @@ async function saveGame() {
   };
   if (notion) {
     try {
-      const page = await notion.create(game, getCatById(catId)?.name || '');
+      const page = await notion.create(game, catNotionName(getCatById(catId)));
       game.notionId = page.id;
     } catch(e) { toast('Notion : ' + e.message, 'warn'); }
   }
@@ -2500,7 +2517,7 @@ function editGame(id) {
   renderOwnerChecks('edit-owner-input');
   setOwnerChecks('edit-owner-input', g.owner);
   populateSelect('edit-game-cat',
-    [{ value: '', label: '— Non catégorisé —' }, ...state.categories.map(c => ({ value: c.id, label: c.emoji + ' ' + c.name }))],
+    [{ value: '', label: '— Non catégorisé —' }, ...state.categories.map(c => ({ value: c.id, label: catNotionName(c) }))],
     g.catId || '');
   document.getElementById('edit-game-players').value = g.players || '';
   document.getElementById('edit-game-duration').value = g.duration || '';
@@ -2538,7 +2555,7 @@ async function saveGameQuickEdit() {
   g.players     = document.getElementById('quick-edit-players').value.trim();
   g.description = document.getElementById('quick-edit-description').value.trim();
   if (notion && g.notionId) {
-    try { await notion.update(g.notionId, g, getCatById(g.catId)?.name || ''); }
+    try { await notion.update(g.notionId, g, catNotionName(getCatById(g.catId))); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
   }
   save();
@@ -2557,7 +2574,7 @@ async function updateGame() {
   g.players  = document.getElementById('edit-game-players').value.trim();
   g.duration = document.getElementById('edit-game-duration').value.trim();
   if (notion && g.notionId) {
-    try { await notion.update(g.notionId, g, getCatById(g.catId)?.name || ''); }
+    try { await notion.update(g.notionId, g, catNotionName(getCatById(g.catId))); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
   }
   save();
@@ -2977,7 +2994,7 @@ async function toggleGameHidden(id) {
   if (!g) return;
   g.hidden = !g.hidden;
   if (notion && g.notionId) {
-    try { await notion.update(g.notionId, g, getCatById(g.catId)?.name || ''); }
+    try { await notion.update(g.notionId, g, catNotionName(getCatById(g.catId))); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
   }
   save();
@@ -3005,7 +3022,7 @@ function renderCatGrid() {
                   ondragstart="catCardDragStart(event,${cat.id})"
                   ondragend="catCardDragEnd(event)">⠿</span>
             <div class="cat-card-title">
-              ${escHtml(cat.name)}
+              ${escHtml(catNotionName(cat))}
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
@@ -3120,7 +3137,7 @@ async function catDrop(e, catId) {
   if (!game || game.catId === catId) return;
   game.catId = catId;
   if (notion && game.notionId) {
-    try { await notion.update(game.notionId, game, getCatById(catId)?.name || ''); }
+    try { await notion.update(game.notionId, game, catNotionName(getCatById(catId))); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
   }
   save();
@@ -3151,7 +3168,10 @@ function openMoveSheet(gameId, e) {
   const opts = document.getElementById('cat-move-options');
   const cats = [
     { id: null, emoji: '—', name: 'Non catégorisé' },
-    ...state.categories.map(c => ({ id: c.id, emoji: c.emoji, name: c.name })),
+    ...state.categories.map(c => {
+      const { emoji: em, name: nm } = parseEmojiPrefix(catNotionName(c));
+      return { id: c.id, emoji: em, name: nm || c.name };
+    }),
   ];
   opts.innerHTML = cats.map(c => `
     <button class="bottom-sheet-option${game.catId === c.id ? ' current' : ''}"
@@ -3175,7 +3195,7 @@ async function moveGameToCategory(gameId, catId) {
   if (!game || game.catId === catId) return;
   game.catId = catId;
   if (notion && game.notionId) {
-    try { await notion.updateCategory(game.notionId, getCatById(catId)?.name || ''); }
+    try { await notion.updateCategory(game.notionId, catNotionName(getCatById(catId))); }
     catch(e) { toast('Notion : ' + e.message, 'warn'); }
   }
   save();
@@ -3302,7 +3322,7 @@ function renderVisualGrid() {
       : games.map(g => thumbHtml(g, 'selected')).join('');
     return `<div class="visual-cat-section" data-cat-id="${cat.id}">
       <div class="visual-cat-header" id="visual-cat-hdr-${cat.id}">
-        <div class="visual-cat-header-title"><span>${cat.emoji}</span>${escHtml(cat.name)}</div>
+        <div class="visual-cat-header-title">${escHtml(catNotionName(cat))}</div>
         <span class="cat-count-badge">${games.length}</span>
       </div>
       <div class="visual-drop-zone thumb-grid" data-cat-id="${cat.id}"
@@ -3499,7 +3519,7 @@ function renderDashboard() {
     </div>
   `;
 
-  const catData = state.categories.map(c => ({ name: c.emoji + ' ' + c.name, count: visibleGames.filter(g => g.catId === c.id).length }))
+  const catData = state.categories.map(c => ({ name: catNotionName(c), count: visibleGames.filter(g => g.catId === c.id).length }))
     .sort((a,b) => b.count - a.count).slice(0,8);
   document.getElementById('dash-cats').innerHTML = catData.length === 0
     ? '<div class="empty-state" style="padding:24px"><div class="empty-state-sub">Aucune catégorie</div></div>'
@@ -3543,7 +3563,7 @@ function renderCatFilters() {
     <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
     <button class="filter-chip cat-chip ${activeCatFilter === 'all'  ? 'active' : ''}" onclick="setCatFilter('all',this)">Toutes</button>
     <button class="filter-chip cat-chip ${activeCatFilter === 'none' ? 'active' : ''}" onclick="setCatFilter('none',this)">Non catégorisé</button>
-    ${state.categories.map(c => `<button class="filter-chip cat-chip ${activeCatFilter === c.id ? 'active' : ''}" onclick="setCatFilter(${c.id},this)">${c.emoji} ${escHtml(c.name)}</button>`).join('')}
+    ${state.categories.map(c => `<button class="filter-chip cat-chip ${activeCatFilter === c.id ? 'active' : ''}" onclick="setCatFilter(${c.id},this)">${escHtml(catNotionName(c))}</button>`).join('')}
   `;
 }
 
@@ -3963,7 +3983,7 @@ function switchImportTab(id, el) {
 function populateCategorySelects() {
   const opts = [
     '<option value="">— Auto-détection —</option>',
-    ...state.categories.map(c => `<option value="${c.id}">${c.emoji} ${escHtml(c.name)}</option>`)
+    ...state.categories.map(c => `<option value="${c.id}">${escHtml(catNotionName(c))}</option>`)
   ].join('');
   const s = document.getElementById('game-cat-input');
   if (s) s.innerHTML = opts;
