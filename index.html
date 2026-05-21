@@ -1566,6 +1566,10 @@ class NotionAPI {
     return pages;
   }
 
+  async getPage(pageId) {
+    return this._req(`/pages/${pageId}`);
+  }
+
   async queryChangedSince(isoTimestamp) {
     const pages = [];
     let cursor = null;
@@ -1857,11 +1861,13 @@ async function syncBidirectional() {
       dbg('Sync complet (premier chargement)');
       notionPages = await notion.queryAll();
     } else {
-      dbg(`Sync différentiel depuis ${lastSyncISO}`);
+      dbg('Sync différentiel : comparaison page par page');
 
-      // Phase 1: lightweight fetch of all page IDs to detect deletions
+      // Phase 1: lightweight fetch of all page IDs + last_edited_time
       const allSummaries = await notion.queryAllIds();
       const notionIdSet = new Set(allSummaries.map(p => p.id));
+
+      // Detect deletions
       const deletedNotionIds = new Set(
         state.games.filter(g => g.notionId && !notionIdSet.has(g.notionId)).map(g => g.notionId)
       );
@@ -1870,9 +1876,30 @@ async function syncBidirectional() {
         deletedCount = deletedNotionIds.size;
       }
 
-      // Phase 2: full data only for pages changed since last sync
-      notionPages = await notion.queryChangedSince(lastSyncISO);
-      dbg(`${notionPages.length} page(s) modifiée(s), ${deletedCount} supprimée(s)`);
+      // Phase 2: compare last_edited_time against local notionEditedAt to find gaps
+      const localByNotionId = new Map(state.games.filter(g => g.notionId).map(g => [g.notionId, g]));
+      const gappedIds = allSummaries
+        .filter(p => {
+          const local = localByNotionId.get(p.id);
+          return !local || local.notionEditedAt !== p.last_edited_time;
+        })
+        .map(p => p.id);
+
+      dbg(`${gappedIds.length} gap(s) sur ${allSummaries.length} pages, ${deletedCount} supprimée(s)`);
+
+      // Phase 3: fetch full data only for gapped pages
+      if (gappedIds.length === 0) {
+        notionPages = [];
+      } else if (gappedIds.length > 20) {
+        // Too many gaps — full fetch is more efficient than many individual calls
+        notionPages = await notion.queryAll();
+      } else {
+        notionPages = [];
+        for (const pageId of gappedIds) {
+          try { notionPages.push(await notion.getPage(pageId)); }
+          catch(e) { dbg(`Erreur fetch page ${pageId}: ${e.message}`, 'warn'); }
+        }
+      }
     }
 
     const notionGames = notionPagesToGames(notionPages);
@@ -1952,10 +1979,12 @@ async function syncBidirectional() {
       ? `Sync OK : ${notionGames.length} jeux depuis Notion`
         + (pushed_    ? `, ${pushed_} jeu(x) envoyé(s)`              : '')
         + (catPushed  ? `, ${catPushed} catégorie(s) mise(s) à jour` : '')
-      : `Sync diff : ${notionGames.length} modif(s) Notion`
-        + (deletedCount ? `, ${deletedCount} supprimé(s)`            : '')
-        + (pushed_      ? `, ${pushed_} jeu(x) envoyé(s)`           : '')
-        + (catPushed    ? `, ${catPushed} catégorie(s) mise(s) à jour` : '');
+      : notionGames.length === 0 && !deletedCount && !pushed_ && !catPushed
+        ? 'Sync diff : aucun écart détecté'
+        : `Sync diff : ${notionGames.length} mise(s) à jour`
+          + (deletedCount ? `, ${deletedCount} supprimé(s)`              : '')
+          + (pushed_      ? `, ${pushed_} jeu(x) envoyé(s)`             : '')
+          + (catPushed    ? `, ${catPushed} catégorie(s) mise(s) à jour` : '');
     dbg(msg, 'ok');
     toast(msg, 'success');
   } catch(e) {
@@ -2082,7 +2111,7 @@ function notionPagesToGames(pages) {
     const selection   = m.propSelection   ? (props[m.propSelection]?.multi_select || []).map(o => o.name) : [];
     const coverUrl    = page.cover?.external?.url || page.cover?.file?.url || '';
 
-    return { id: id++, name, owner: owners, catId, notionCatId, players, duration, description, hidden, selection, coverUrl, notionId: page.id };
+    return { id: id++, name, owner: owners, catId, notionCatId, players, duration, description, hidden, selection, coverUrl, notionId: page.id, notionEditedAt: page.last_edited_time };
   }).filter(Boolean);
 
   const hiddenCount = games.filter(g => g.hidden).length;
