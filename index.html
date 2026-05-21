@@ -1916,7 +1916,8 @@ async function syncBidirectional() {
         const local = localByNotionId.get(ng.notionId);
         if (!local) return { ...ng, id: nextId++ };
         const catId = local.catId != null ? local.catId : ng.catId;
-        if (local.catId != null && local.catId !== ng.notionCatId) {
+        const expectedCatName = catNotionName(getCatById(catId));
+        if (local.catId != null && (local.catId !== ng.notionCatId || (expectedCatName && ng.notionCatName !== expectedCatName))) {
           categoryMismatches.push({ ...ng, id: local.id, catId });
         }
         return { ...ng, id: local.id, catId };
@@ -1940,7 +1941,8 @@ async function syncBidirectional() {
           state.games.push({ ...ng, id: nextId++ });
         } else {
           const catId = local.catId != null ? local.catId : ng.catId;
-          if (local.catId != null && local.catId !== ng.notionCatId) {
+          const expectedCatName = catNotionName(getCatById(catId));
+          if (local.catId != null && (local.catId !== ng.notionCatId || (expectedCatName && ng.notionCatName !== expectedCatName))) {
             categoryMismatches.push({ ...ng, id: local.id, catId });
           }
           const idx = state.games.findIndex(g => g.id === local.id);
@@ -1958,11 +1960,28 @@ async function syncBidirectional() {
       var pushed_ = pushed;
     }
 
+    // Incremental path: also check non-gapped local games for Notion category name format mismatches
+    if (!isFirstSync) {
+      const gappedNotionIds = new Set(notionGames.map(ng => ng.notionId));
+      for (const g of state.games) {
+        if (!g.notionId || gappedNotionIds.has(g.notionId)) continue;
+        if (g.catId == null) continue;
+        const expectedCatName = catNotionName(getCatById(g.catId));
+        if (expectedCatName && g.notionCatName != null && g.notionCatName !== expectedCatName) {
+          categoryMismatches.push(g);
+        }
+      }
+    }
+
     // Push category mismatches to Notion (local category wins)
     let catPushed = 0;
     for (const g of categoryMismatches) {
       try {
-        await notion.updateCategory(g.notionId, catNotionName(getCatById(g.catId)));
+        const newCatName = catNotionName(getCatById(g.catId));
+        await notion.updateCategory(g.notionId, newCatName);
+        // Update stored notionCatName so we don't re-push next sync
+        const idx = state.games.findIndex(sg => sg.id === g.id);
+        if (idx >= 0) state.games[idx] = { ...state.games[idx], notionCatName: newCatName };
         catPushed++;
       } catch(e) {
         dbg(`Catégorie non poussée pour "${g.name}" : ${e.message}`, 'warn');
@@ -2094,7 +2113,11 @@ function notionPagesToGames(pages) {
     }
 
     const catName   = m.propCategorie ? (props[m.propCategorie]?.select?.name || '') : '';
-    const cat       = state.categories.find(c => catNotionName(c) === catName || c.name === catName);
+    // Match by full notion name, bare name, or name with emoji stripped — handles old push without emoji
+    const cat       = state.categories.find(c => {
+      const nn = catNotionName(c);
+      return nn === catName || c.name === catName || parseEmojiPrefix(nn).name === catName;
+    });
     const notionCatId = cat?.id ?? null; // what Notion actually has (null = not set / unrecognised)
     const catId       = notionCatId !== null ? notionCatId : detectCategory(name);
 
@@ -2111,7 +2134,7 @@ function notionPagesToGames(pages) {
     const selection   = m.propSelection   ? (props[m.propSelection]?.multi_select || []).map(o => o.name) : [];
     const coverUrl    = page.cover?.external?.url || page.cover?.file?.url || '';
 
-    return { id: id++, name, owner: owners, catId, notionCatId, players, duration, description, hidden, selection, coverUrl, notionId: page.id, notionEditedAt: page.last_edited_time };
+    return { id: id++, name, owner: owners, catId, notionCatId, notionCatName: catName, players, duration, description, hidden, selection, coverUrl, notionId: page.id, notionEditedAt: page.last_edited_time };
   }).filter(Boolean);
 
   const hiddenCount = games.filter(g => g.hidden).length;
