@@ -1026,13 +1026,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             </div>
             <div>
               <label>Propriétaire</label>
-              <input id="map-proprietaire" placeholder="Propriétaire" value="Propriétaire">
+              <input id="map-proprietaire" placeholder="Qui possède ?" value="Qui possède ?">
             </div>
           </div>
           <div class="form-row form-row-2">
             <div>
               <label>Catégorie</label>
-              <input id="map-categorie" placeholder="Catégorie" value="Catégorie">
+              <input id="map-categorie" placeholder="Catégorie soirée Jeux" value="Catégorie soirée Jeux">
             </div>
             <div>
               <label>Type du champ Propriétaire</label>
@@ -1045,11 +1045,11 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="form-row form-row-2">
             <div>
               <label>Nb joueurs <span style="font-weight:400;color:var(--muted);">(laisser vide = ignorer)</span></label>
-              <input id="map-joueurs" placeholder="Joueurs" value="Joueurs">
+              <input id="map-joueurs" placeholder="Joueurs max" value="Joueurs max">
             </div>
             <div>
               <label>Durée <span style="font-weight:400;color:var(--muted);">(laisser vide = ignorer)</span></label>
-              <input id="map-duree" placeholder="Durée" value="Durée">
+              <input id="map-duree" placeholder="Durée (en min)" value="Durée (en min)">
             </div>
           </div>
           <div class="form-row form-row-2">
@@ -1312,8 +1312,8 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 // ============================
 const SETTINGS_DEFAULTS = {
   notionToken: '', notionDbId: '',
-  propNom: 'Nom', propProprietaire: 'Propriétaire',
-  propCategorie: 'Catégorie', propJoueurs: 'Joueurs', propDuree: 'Durée', propDescription: 'Ma description',
+  propNom: 'Nom', propProprietaire: 'Qui possède ?',
+  propCategorie: 'Catégorie soirée Jeux', propJoueurs: 'Joueurs max', propDuree: 'Durée (en min)', propDescription: 'Ma description',
   propSelection: 'Sélection',
   ownerType: 'multi_select',
   openrouterApiKey: '',
@@ -2160,7 +2160,7 @@ async function saveSettingsAndSync() {
   settings.notionToken         = token;
   settings.notionDbId          = dbId;
   settings.propNom             = document.getElementById('map-nom').value.trim()          || 'Nom';
-  settings.propProprietaire    = document.getElementById('map-proprietaire').value.trim() || 'Propriétaire';
+  settings.propProprietaire    = document.getElementById('map-proprietaire').value.trim() || 'Qui possède ?';
   settings.propCategorie       = document.getElementById('map-categorie').value.trim()    || '';
   settings.propJoueurs         = document.getElementById('map-joueurs').value.trim()      || '';
   settings.propDuree           = document.getElementById('map-duree').value.trim()        || '';
