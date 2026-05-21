@@ -1548,6 +1548,14 @@ class NotionAPI {
     return p;
   }
 
+  async updateCategory(pageId, catName) {
+    const m = this.m;
+    if (!m.propCategorie) return;
+    return this._req(`/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({
+      properties: { [m.propCategorie]: catName ? { select: { name: catName } } : { select: null } }
+    })});
+  }
+
   async updateSelection(notionId, selection) {
     const m = this.m;
     if (!m.propSelection) return;
@@ -1799,10 +1807,10 @@ async function syncBidirectional() {
     let catPushed = 0;
     for (const g of categoryMismatches) {
       try {
-        await notion.update(g.notionId, g, getCatById(g.catId)?.name || '');
+        await notion.updateCategory(g.notionId, getCatById(g.catId)?.name || '');
         catPushed++;
       } catch(e) {
-        console.warn('[Notion] Failed to push category for:', g.name, e.message);
+        dbg(`Catégorie non poussée pour "${g.name}" : ${e.message}`, 'warn');
       }
     }
 
