@@ -561,6 +561,44 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   .topbar { padding: 12px 18px; }
 }
 
+/* Bottom sheet (mobile category picker) */
+.bottom-sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 300;
+}
+.bottom-sheet-panel {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 301;
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  padding: 0 0 env(safe-area-inset-bottom, 12px);
+  max-height: 80vh; overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+.bottom-sheet-panel.open { transform: translateY(0); }
+.bottom-sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border2); margin: 10px auto 0; }
+.bottom-sheet-header { padding: 12px 18px 10px; font-size: 0.82rem; color: var(--muted); border-bottom: 1px solid var(--border); }
+.bottom-sheet-header strong { color: var(--text); }
+.bottom-sheet-option {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 13px 18px;
+  background: none; border: none; border-bottom: 1px solid var(--border);
+  font-size: 0.9rem; color: var(--text); cursor: pointer; text-align: left;
+}
+.bottom-sheet-option:last-child { border-bottom: none; }
+.bottom-sheet-option:active { background: var(--green-light); }
+.bottom-sheet-option.current { color: var(--muted); pointer-events: none; }
+.bottom-sheet-option-emoji { font-size: 1.1rem; width: 22px; text-align: center; flex-shrink: 0; }
+
+/* pill move button — touch only */
+.pill-move-btn {
+  display: none; background: none; border: none; cursor: pointer;
+  font-size: 0.7rem; padding: 0 0 0 4px; line-height: 1; color: var(--muted);
+}
+@media (pointer: coarse) {
+  .pill-drag-handle { display: none; }
+  .pill-move-btn { display: inline; opacity: 0.6; }
+  .cat-game-pill { cursor: pointer; }
+}
+
 /* Mobile */
 @media (max-width: 640px) {
   /* Sidebar becomes drawer */
@@ -1306,6 +1344,14 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 
 <div class="toast-container" id="toasts"></div>
 
+<!-- Mobile: category picker bottom sheet -->
+<div id="cat-move-backdrop" class="bottom-sheet-backdrop" style="display:none;" onclick="closeMoveSheet()"></div>
+<div id="cat-move-panel" class="bottom-sheet-panel">
+  <div class="bottom-sheet-handle"></div>
+  <div class="bottom-sheet-header">Déplacer vers… <strong id="cat-move-game-name"></strong></div>
+  <div id="cat-move-options"></div>
+</div>
+
 <script>
 // ============================
 // SETTINGS
@@ -1687,6 +1733,7 @@ async function init() {
     }
   } else {
     loadGamesLocal();
+    if (!state.categories.length) { DEFAULT_CATEGORIES.forEach(c => addCategoryData(c)); saveCategories(); }
   }
   await loadStaticManifest();
   populateCategorySelects();
@@ -1719,11 +1766,8 @@ function migrateOldData() {
 function loadCategories() {
   const s = localStorage.getItem('ludo_cats');
   if (s) { try { state.categories = JSON.parse(s); } catch(e) {} }
-  // If Notion is configured, defer category creation to syncBidirectional (imports from DB schema)
-  if (!state.categories.length && !(settings.notionToken && settings.notionDbId)) {
-    DEFAULT_CATEGORIES.forEach(c => addCategoryData(c));
-    saveCategories();
-  }
+  // No fallback here — if Notion is configured, importCategoriesFromNotion() runs in syncBidirectional.
+  // If not configured and still empty, DEFAULT_CATEGORIES are applied after loadGamesLocal() in init().
   if (state.categories.length) state.nextCatId = Math.max(...state.categories.map(c => c.id)) + 1;
 }
 
@@ -2861,7 +2905,7 @@ function renderCatGrid() {
     const pills = games.length === 0
       ? '<span class="cat-empty">Aucun jeu — déposez ici</span>'
       : games.map(g =>
-          `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="${cat.id}"><span class="pill-drag-handle">⠿</span>${escHtml(g.name)}<button class="pill-edit-btn" onclick="openGameQuickEdit(${g.id},event)" title="Modifier">✏️</button></span>`
+          `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="${cat.id}" onclick="pillTap(${g.id},event)"><span class="pill-drag-handle">⠿</span>${escHtml(g.name)}<button class="pill-move-btn" onclick="openMoveSheet(${g.id},event)" title="Déplacer">⇄</button><button class="pill-edit-btn" onclick="openGameQuickEdit(${g.id},event)" title="Modifier">✏️</button></span>`
         ).join('');
     return `
       <div class="cat-card" data-cat-id="${cat.id}"
@@ -2899,7 +2943,7 @@ function renderCatGrid() {
   if (uncatPillsEl) uncatPillsEl.innerHTML = uncatGames.length === 0
     ? '<span class="cat-empty">Aucun jeu non classé</span>'
     : uncatGames.map(g =>
-        `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="null"><span class="pill-drag-handle">⠿</span>${escHtml(g.name)}<button class="pill-edit-btn" onclick="openGameQuickEdit(${g.id},event)" title="Modifier">✏️</button></span>`
+        `<span class="cat-game-pill" draggable="true" data-game-id="${g.id}" data-cat-id="null" onclick="pillTap(${g.id},event)"><span class="pill-drag-handle">⠿</span>${escHtml(g.name)}<button class="pill-move-btn" onclick="openMoveSheet(${g.id},event)" title="Déplacer">⇄</button><button class="pill-edit-btn" onclick="openGameQuickEdit(${g.id},event)" title="Modifier">✏️</button></span>`
       ).join('');
   grid.innerHTML = catCards + `
     <div class="cat-card cat-card-new" onclick="openAddCategory()">
@@ -2996,6 +3040,60 @@ async function catDrop(e, catId) {
   save();
   renderCatGrid();
   if (document.getElementById('page-visual')?.classList.contains('active')) renderVisualGrid();
+  renderGamesTable();
+  renderDashboard();
+}
+
+// ============================
+// MOBILE CATEGORY PICKER
+// ============================
+const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+
+function pillTap(gameId, e) {
+  if (!isTouchDevice()) return; // desktop: drag handles it
+  // Don't trigger if the tap landed on one of the child buttons
+  if (e.target.closest('button')) return;
+  e.stopPropagation();
+  openMoveSheet(gameId, e);
+}
+
+function openMoveSheet(gameId, e) {
+  e.stopPropagation();
+  const game = state.games.find(g => g.id === gameId);
+  if (!game) return;
+  document.getElementById('cat-move-game-name').textContent = game.name;
+  const opts = document.getElementById('cat-move-options');
+  const cats = [
+    { id: null, emoji: '—', name: 'Non catégorisé' },
+    ...state.categories.map(c => ({ id: c.id, emoji: c.emoji, name: c.name })),
+  ];
+  opts.innerHTML = cats.map(c => `
+    <button class="bottom-sheet-option${game.catId === c.id ? ' current' : ''}"
+            onclick="moveGameToCategory(${gameId}, ${c.id === null ? 'null' : c.id})">
+      <span class="bottom-sheet-option-emoji">${c.emoji}</span>
+      ${escHtml(c.name)}
+      ${game.catId === c.id ? ' ✓' : ''}
+    </button>`).join('');
+  document.getElementById('cat-move-backdrop').style.display = '';
+  requestAnimationFrame(() => document.getElementById('cat-move-panel').classList.add('open'));
+}
+
+function closeMoveSheet() {
+  document.getElementById('cat-move-panel').classList.remove('open');
+  setTimeout(() => { document.getElementById('cat-move-backdrop').style.display = 'none'; }, 280);
+}
+
+async function moveGameToCategory(gameId, catId) {
+  closeMoveSheet();
+  const game = state.games.find(g => g.id === gameId);
+  if (!game || game.catId === catId) return;
+  game.catId = catId;
+  if (notion && game.notionId) {
+    try { await notion.updateCategory(game.notionId, getCatById(catId)?.name || ''); }
+    catch(e) { toast('Notion : ' + e.message, 'warn'); }
+  }
+  save();
+  renderCatGrid();
   renderGamesTable();
   renderDashboard();
 }
