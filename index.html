@@ -1180,6 +1180,39 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   <div class="loading-text">Synchronisation avec Notion…</div>
 </div>
 
+<!-- SPLASH SCREEN: empty library -->
+<div id="splash-overlay" style="display:none;position:fixed;inset:0;background:rgba(27,94,32,0.96);backdrop-filter:blur(6px);z-index:400;align-items:center;justify-content:center;padding:24px;">
+  <div style="background:var(--surface);border-radius:20px;padding:40px 36px;max-width:460px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35);animation:modal-in 0.25s ease;">
+    <div style="font-size:3.5rem;margin-bottom:16px;">🎲</div>
+    <div style="font-family:var(--font-head);font-size:1.5rem;font-weight:900;color:var(--green-dark);margin-bottom:8px;">Bienvenue dans la Ludothèque !</div>
+
+    <!-- state: notion configured -->
+    <div id="splash-configured">
+      <p style="font-size:0.9rem;color:var(--text-med);line-height:1.65;margin-bottom:28px;">Votre bibliothèque est vide pour l'instant.<br>Synchronisez depuis Notion pour charger vos jeux.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-primary" style="justify-content:center;font-size:1rem;padding:13px 20px;" onclick="splashSync()">
+          ⟳ Synchroniser depuis Notion
+        </button>
+        <button class="btn btn-ghost" style="justify-content:center;font-size:0.88rem;color:var(--muted);" onclick="closeSplash()">
+          Continuer sans synchroniser
+        </button>
+      </div>
+    </div>
+
+    <!-- state: notion not configured -->
+    <div id="splash-not-configured">
+      <div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:var(--r-sm);padding:14px 16px;margin-bottom:24px;font-size:0.86rem;color:#C62828;line-height:1.65;text-align:left;">
+        L'accès Notion n'a pas été configuré, il n'est pas possible de voir les jeux enregistrés ou d'en ajouter des nouveaux.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-primary" style="justify-content:center;font-size:1rem;padding:13px 20px;" onclick="splashSettings()">
+          ⚙ Configurer la connexion Notion
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: RECATEGORIZE -->
 <div class="modal-overlay" id="modal-recat">
   <div class="modal" style="max-width:400px;">
@@ -1782,6 +1815,32 @@ async function init() {
   updateSidebarStats();
   updateConnDot();
   showPage(localStorage.getItem('ludo_current_page') || 'dashboard');
+  if (!state.games.length) showSplash();
+}
+
+function showSplash() {
+  const configured = !!(settings.notionToken && settings.notionDbId);
+  document.getElementById('splash-configured').style.display = configured ? 'block' : 'none';
+  document.getElementById('splash-not-configured').style.display = configured ? 'none' : 'block';
+  document.getElementById('splash-overlay').style.display = 'flex';
+}
+
+function closeSplash() {
+  document.getElementById('splash-overlay').style.display = 'none';
+}
+
+async function splashSync() {
+  closeSplash();
+  if (!notion) {
+    showPage('settings');
+    return;
+  }
+  await manualSync();
+}
+
+function splashSettings() {
+  closeSplash();
+  showPage('settings');
 }
 
 function migrateOldData() {
@@ -2501,6 +2560,10 @@ function setOwnerChecks(containerId, owners) {
 // ADD GAME
 // ============================
 function openAddGame() {
+  if (!settings.notionToken || !settings.notionDbId) {
+    toast('La connexion à Notion n\'a pas été configurée', 'warn');
+    return;
+  }
   document.getElementById('game-name-input').value = '';
   document.getElementById('game-players-input').value = '';
   document.getElementById('game-duration-input').value = '';
