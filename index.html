@@ -2112,40 +2112,21 @@ async function syncBidirectional() {
 }
 
 async function syncOwnersFromNotion() {
-  dbg('syncOwnersFromNotion() démarré — ownerType=' + notion?.m?.ownerType);
-  if (!notion || notion.m.ownerType !== 'multi_select') {
-    dbg('syncOwnersFromNotion() ignoré (pas de notion ou ownerType !== multi_select)', 'warn');
-    return;
-  }
+  if (!notion || notion.m.ownerType !== 'multi_select') return;
   try {
     const db = await notion._req(`/databases/${notion.dbId}`);
-    const propKey = notion.m.propProprietaire;
-    const prop = db.properties?.[propKey];
-    dbg(`Champ propriétaire cherché : "${propKey}" → type trouvé : ${prop?.type ?? 'ABSENT'}`);
-    if (prop?.type !== 'multi_select') {
-      dbg('Champ propriétaire non trouvé ou pas multi_select — abandon', 'warn');
-      return;
-    }
+    const prop = db.properties?.[notion.m.propProprietaire];
+    if (prop?.type !== 'multi_select') return;
     const options = prop.multi_select.options || [];
-    dbg(`Options Notion reçues (${options.length}) : ${options.map(o => JSON.stringify(o.name)).join(', ')}`);
-    dbg(`AUTO_HIDDEN_OWNER_NAMES : ${[...AUTO_HIDDEN_OWNER_NAMES].map(n => JSON.stringify(n)).join(', ')}`);
-    dbg(`ownersList actuel (${ownersList.length}) : ${ownersList.map(o => `${JSON.stringify(o.key)} hidden=${o.hidden}`).join(', ')}`);
-
     let added = 0, updated = 0;
     for (const opt of options) {
-      const inHiddenSet = AUTO_HIDDEN_OWNER_NAMES.has(opt.name);
       const existing = ownersList.find(o => o.key === opt.name || o.label.toLowerCase() === opt.name.toLowerCase());
-      dbg(`  opt="${opt.name}" → inHiddenSet=${inHiddenSet}, existing=${existing ? `clé="${existing.key}" hidden=${existing.hidden}` : 'AUCUN'}`);
       if (!existing) {
-        ownersList.push({ key: opt.name, label: opt.name, icon: '👤', hidden: inHiddenSet });
-        dbg(`    → ajouté avec hidden=${inHiddenSet}`);
+        ownersList.push({ key: opt.name, label: opt.name, icon: '👤', hidden: AUTO_HIDDEN_OWNER_NAMES.has(opt.name) });
         added++;
-      } else if (inHiddenSet && !existing.hidden) {
+      } else if (AUTO_HIDDEN_OWNER_NAMES.has(opt.name) && !existing.hidden) {
         existing.hidden = true;
-        dbg(`    → mis à jour hidden=true`);
         updated++;
-      } else {
-        dbg(`    → aucun changement`);
       }
     }
     if (added || updated) {
@@ -2154,10 +2135,10 @@ async function syncOwnersFromNotion() {
       refreshOwnerUI();
       dbg(`Propriétaires : ${added} ajouté(s), ${updated} masqué(s)`, 'ok');
     } else {
-      dbg('Propriétaires Notion déjà synchronisés (aucun changement)', 'ok');
+      dbg('Propriétaires Notion déjà synchronisés', 'ok');
     }
   } catch(e) {
-    dbg('syncOwnersFromNotion échoué : ' + e.message, 'error');
+    dbg('Sync propriétaires Notion ignoré : ' + e.message, 'warn');
   }
 }
 
