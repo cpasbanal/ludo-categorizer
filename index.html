@@ -685,6 +685,33 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
 .settings-status.error   { background: #FFEBEE; color: #C62828; border: 1px solid #FFCDD2; }
 .settings-status.testing { background: var(--blue-light); color: var(--blue); border: 1px solid #BBDEFB; }
 
+/* ===== TOOLTIPS ===== */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.94);
+  background: #1a2e1a;
+  color: #fff;
+  font-size: 0.69rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 1000;
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+[data-tooltip]:hover::after { opacity: 1; transform: translateX(-50%) scale(1); }
+[data-tooltip].tt-left::after { left: auto; right: 0; transform: translateX(0) scale(0.94); }
+[data-tooltip].tt-left:hover::after { transform: translateX(0) scale(1); }
+
 /* ===== OWNER CHECKBOXES ===== */
 .owner-checks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .owner-check {
@@ -761,11 +788,11 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div id="page-dashboard" class="page active">
       <div class="topbar">
         <div class="topbar-left">
-          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <button class="hamburger" onclick="openSidebar()" data-tooltip="Menu" aria-label="Ouvrir le menu">☰</button>
           <div class="page-title">Tableau de bord</div>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-primary" onclick="openAddGame()">+ Ajouter</button>
+          <button class="btn btn-primary" onclick="openAddGame()" data-tooltip="Ajouter un jeu">+ Ajouter</button>
         </div>
       </div>
       <div style="padding: 24px;">
@@ -787,13 +814,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div id="page-games" class="page">
       <div class="topbar">
         <div class="topbar-left">
-          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <button class="hamburger" onclick="openSidebar()" data-tooltip="Menu" aria-label="Ouvrir le menu">☰</button>
           <div class="page-title">Tous les jeux</div>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-secondary" id="btn-sync" onclick="manualSync()" style="display:none">⟳ Sync Notion</button>
-          <button class="btn btn-secondary" onclick="openRecatModal()">↻ Recatégoriser</button>
-          <button class="btn btn-primary" onclick="openAddGame()">+ Ajouter</button>
+          <button class="btn btn-secondary" id="btn-sync" onclick="manualSync()" style="display:none" data-tooltip="Synchroniser depuis Notion">⟳ Sync Notion</button>
+          <button class="btn btn-secondary" onclick="openRecatModal()" data-tooltip="Catégoriser automatiquement avec l'IA">↻ Recatégoriser</button>
+          <button class="btn btn-primary tt-left" onclick="openAddGame()" data-tooltip="Ajouter un jeu">+ Ajouter</button>
         </div>
       </div>
       <div style="padding: 24px;">
@@ -809,7 +836,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">
             <span style="font-size:0.75rem;color:var(--muted);font-weight:700;">Catégorie :</span>
           </div>
-          <button id="btn-show-hidden" class="filter-chip" style="margin-left:auto;" onclick="toggleShowHidden()">🙈 Voir masqués</button>
+          <button id="btn-show-hidden" class="filter-chip" style="margin-left:auto;" onclick="toggleShowHidden()" data-tooltip="Afficher / masquer les jeux exclus des soirées">🙈 Voir masqués</button>
         </div>
         <div class="card" style="padding: 0; overflow: hidden;">
           <table class="games-table" id="games-table">
@@ -838,12 +865,12 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div id="page-categories" class="page">
       <div class="topbar">
         <div class="topbar-left">
-          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <button class="hamburger" onclick="openSidebar()" data-tooltip="Menu" aria-label="Ouvrir le menu">☰</button>
           <div class="page-title">Catégories</div>
         </div>
         <div class="topbar-actions">
-          <button class="btn btn-secondary" onclick="openRecatModal()">↻ Recatégoriser</button>
-          <button class="btn btn-primary" onclick="openAddCategory()">+ Nouvelle</button>
+          <button class="btn btn-secondary" onclick="openRecatModal()" data-tooltip="Catégoriser automatiquement avec l'IA">↻ Recatégoriser</button>
+          <button class="btn btn-primary tt-left" onclick="openAddCategory()" data-tooltip="Créer une nouvelle catégorie">+ Nouvelle</button>
         </div>
       </div>
       <div style="padding: 24px;">
@@ -865,7 +892,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div id="page-visual" class="page">
       <div class="topbar">
         <div class="topbar-left">
-          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <button class="hamburger" onclick="openSidebar()" data-tooltip="Menu" aria-label="Ouvrir le menu">☰</button>
           <div class="page-title">Que la partie commence</div>
         </div>
         <div class="topbar-actions">
@@ -891,7 +918,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div id="page-import" class="page">
       <div class="topbar">
         <div class="topbar-left">
-          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <button class="hamburger" onclick="openSidebar()" data-tooltip="Menu" aria-label="Ouvrir le menu">☰</button>
           <div class="page-title">Importer des jeux</div>
         </div>
       </div>
@@ -1011,7 +1038,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <div id="page-settings" class="page">
       <div class="topbar">
         <div class="topbar-left">
-          <button class="hamburger" onclick="openSidebar()">☰</button>
+          <button class="hamburger" onclick="openSidebar()" data-tooltip="Menu" aria-label="Ouvrir le menu">☰</button>
           <div class="page-title">Paramètres</div>
         </div>
       </div>
@@ -1040,15 +1067,15 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           </div>
           <div id="settings-status" class="settings-status"></div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
-            <button class="btn btn-secondary" onclick="testNotionConnection()">🔌 Tester la connexion</button>
-            <button class="btn btn-primary" onclick="saveSettingsAndSync()">💾 Sauvegarder &amp; Synchroniser</button>
-            <button class="btn btn-danger" onclick="clearNotionSettings()">Déconnecter</button>
+            <button class="btn btn-secondary" onclick="testNotionConnection()" data-tooltip="Vérifier que les identifiants Notion sont valides">🔌 Tester la connexion</button>
+            <button class="btn btn-primary" onclick="saveSettingsAndSync()" data-tooltip="Sauvegarder et importer les jeux depuis Notion">💾 Sauvegarder &amp; Synchroniser</button>
+            <button class="btn btn-danger" onclick="clearNotionSettings()" data-tooltip="Supprimer les identifiants Notion enregistrés">Déconnecter</button>
           </div>
           <details id="debug-details" style="margin-top:16px;" open>
             <summary style="cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--muted);user-select:none;">🐛 Journal de débogage</summary>
             <div style="margin-top:8px;display:flex;gap:6px;">
-              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="runFullDiagnostic()">▶ Lancer diagnostic</button>
-              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearDebugLog()">✕ Effacer</button>
+              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="runFullDiagnostic()" data-tooltip="Analyser la connexion Notion">▶ Lancer diagnostic</button>
+              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearDebugLog()" data-tooltip="Vider le journal de débogage">✕ Effacer</button>
             </div>
             <pre id="debug-log" style="margin-top:8px;padding:10px;background:#1a1a2e;color:#a8ff78;border-radius:6px;font-size:0.72rem;line-height:1.6;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;"></pre>
           </details>
@@ -1123,7 +1150,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="form-row">
             <div>
               <label>Modèle IA <span style="font-weight:400;color:var(--muted);">(tous gratuits)</span>
-                <button type="button" onclick="loadFreeModels(true)" id="btn-load-models" style="margin-left:8px;font-size:0.72rem;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-family:inherit;">⟳ Actualiser</button>
+                <button type="button" onclick="loadFreeModels(true)" id="btn-load-models" style="margin-left:8px;font-size:0.72rem;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-family:inherit;" data-tooltip="Recharger les modèles gratuits disponibles">⟳ Actualiser</button>
               </label>
               <select id="settings-or-model" onchange="saveAISettings()">
                 <option value="">— Cliquez sur Actualiser pour charger —</option>
@@ -1139,7 +1166,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
               <button class="btn btn-ghost" style="font-size:0.8rem;font-weight:700;color:var(--text-med);padding:2px 6px;gap:6px;display:flex;align-items:center;" onclick="toggleAILog()">
                 📋 Journal des appels IA <span id="ai-log-toggle-icon">▼</span>
               </button>
-              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearAILog()">✕ Effacer</button>
+              <button class="btn btn-ghost" style="font-size:0.75rem;padding:3px 10px;" onclick="clearAILog()" data-tooltip="Vider le journal des appels IA">✕ Effacer</button>
             </div>
             <pre id="ai-log" style="margin:0;padding:12px;background:#0f1117;color:#a8ff78;border-radius:6px;font-size:0.72rem;line-height:1.7;height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:'Courier New',monospace;border:1px solid #2a2a3a;">En attente du premier appel IA…</pre>
           </div>
@@ -1202,7 +1229,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
     <!-- state: notion not configured -->
     <div id="splash-not-configured">
       <div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:var(--r-sm);padding:14px 16px;margin-bottom:24px;font-size:0.86rem;color:#C62828;line-height:1.65;text-align:left;">
-        L'accès Notion n'a pas été configuré, il n'est pas possible de voir les jeux enregistrés ou d'en ajouter des nouveaux.
+        L'accès Notion n'a pas été configuré, il n'est pas possible de voir les jeux enregistrés ou d'en ajouter des nouveaux. Vous pouvez demander à Jérémie un lien magique.
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button class="btn btn-primary" style="justify-content:center;font-size:1rem;padding:13px 20px;" onclick="splashSettings()">
@@ -1701,6 +1728,15 @@ const OWNER_PALETTE = [
   { color: '#00695C', bg: '#E0F2F1', border: '#80CBC4' },
 ];
 const DEFAULT_OWNERS = [];
+
+// Propriétaires dont les jeux sont automatiquement masqués à la synchronisation.
+// Les valeurs correspondent aux noms exacts dans Notion (champ propriétaire).
+const AUTO_HIDDEN_OWNER_NAMES = new Set([
+  'Lucile et Victor',
+  'JB et Julie',
+  'Lucile',
+  'Les joueurs anonymes',
+]);
 let ownersList = [];
 let _ownersByKey = new Map();   // key → { owner, index } — rebuilt by _rebuildOwnerMap
 let _ownersByLabel = new Map(); // label.toLowerCase() → key
@@ -2076,29 +2112,52 @@ async function syncBidirectional() {
 }
 
 async function syncOwnersFromNotion() {
-  if (!notion || notion.m.ownerType !== 'multi_select') return;
+  dbg('syncOwnersFromNotion() démarré — ownerType=' + notion?.m?.ownerType);
+  if (!notion || notion.m.ownerType !== 'multi_select') {
+    dbg('syncOwnersFromNotion() ignoré (pas de notion ou ownerType !== multi_select)', 'warn');
+    return;
+  }
   try {
     const db = await notion._req(`/databases/${notion.dbId}`);
-    const prop = db.properties?.[notion.m.propProprietaire];
-    if (prop?.type !== 'multi_select') return;
+    const propKey = notion.m.propProprietaire;
+    const prop = db.properties?.[propKey];
+    dbg(`Champ propriétaire cherché : "${propKey}" → type trouvé : ${prop?.type ?? 'ABSENT'}`);
+    if (prop?.type !== 'multi_select') {
+      dbg('Champ propriétaire non trouvé ou pas multi_select — abandon', 'warn');
+      return;
+    }
     const options = prop.multi_select.options || [];
-    let added = 0;
+    dbg(`Options Notion reçues (${options.length}) : ${options.map(o => JSON.stringify(o.name)).join(', ')}`);
+    dbg(`AUTO_HIDDEN_OWNER_NAMES : ${[...AUTO_HIDDEN_OWNER_NAMES].map(n => JSON.stringify(n)).join(', ')}`);
+    dbg(`ownersList actuel (${ownersList.length}) : ${ownersList.map(o => `${JSON.stringify(o.key)} hidden=${o.hidden}`).join(', ')}`);
+
+    let added = 0, updated = 0;
     for (const opt of options) {
-      if (!resolveOwnerKey(opt.name)) {
-        ownersList.push({ key: opt.name, label: opt.name, icon: '👤', hidden: false });
+      const inHiddenSet = AUTO_HIDDEN_OWNER_NAMES.has(opt.name);
+      const existing = ownersList.find(o => o.key === opt.name || o.label.toLowerCase() === opt.name.toLowerCase());
+      dbg(`  opt="${opt.name}" → inHiddenSet=${inHiddenSet}, existing=${existing ? `clé="${existing.key}" hidden=${existing.hidden}` : 'AUCUN'}`);
+      if (!existing) {
+        ownersList.push({ key: opt.name, label: opt.name, icon: '👤', hidden: inHiddenSet });
+        dbg(`    → ajouté avec hidden=${inHiddenSet}`);
         added++;
+      } else if (inHiddenSet && !existing.hidden) {
+        existing.hidden = true;
+        dbg(`    → mis à jour hidden=true`);
+        updated++;
+      } else {
+        dbg(`    → aucun changement`);
       }
     }
-    if (added) {
+    if (added || updated) {
       _rebuildOwnerMap();
       saveOwners();
       refreshOwnerUI();
-      dbg(`${added} nouveau(x) propriétaire(s) importé(s) depuis Notion`, 'ok');
+      dbg(`Propriétaires : ${added} ajouté(s), ${updated} masqué(s)`, 'ok');
     } else {
-      dbg('Propriétaires Notion déjà synchronisés', 'ok');
+      dbg('Propriétaires Notion déjà synchronisés (aucun changement)', 'ok');
     }
   } catch(e) {
-    dbg('Sync propriétaires Notion ignoré : ' + e.message, 'warn');
+    dbg('syncOwnersFromNotion échoué : ' + e.message, 'error');
   }
 }
 
@@ -3090,8 +3149,8 @@ function renderGamesTable() {
       <td>
         <div class="game-actions">
           <button class="btn btn-ghost btn-sm" title="${g.hidden ? 'Réintégrer aux soirées' : 'Exclure des soirées'}" onclick="toggleGameHidden(${g.id})">${g.hidden ? '👁️' : '🙈'}</button>
-          <button class="btn btn-ghost btn-sm" onclick="editGame(${g.id})">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id})">✕</button>
+          <button class="btn btn-ghost btn-sm" onclick="editGame(${g.id})" title="Modifier ce jeu">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteGame(${g.id})" title="Supprimer ce jeu">✕</button>
         </div>
       </td>
     </tr>
