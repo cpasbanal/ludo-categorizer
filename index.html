@@ -803,8 +803,8 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
             <div id="dash-cats"></div>
           </div>
           <div class="card">
-            <div class="card-title"><span class="icon">👤</span> Par propriétaire</div>
-            <div id="dash-owners"></div>
+            <div class="card-title"><span class="icon">🖼</span> Jeux prévus pour <em>Que la partie commence</em></div>
+            <div id="dash-visual"></div>
           </div>
         </div>
       </div>
@@ -3686,16 +3686,32 @@ function renderDashboard() {
       </div>
     `).join('');
 
-  document.getElementById('dash-owners').innerHTML = ownersList.filter(o => !o.hidden).map(o => {
-    const count = ownerCounts[o.key] || 0;
-    return `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        ${ownerBadgeHtml(o.key)}
-        <div style="flex:1;"><div class="progress-bar" style="margin:0;"><div class="progress-fill" style="width:${total?Math.round(count/total*100):0}%"></div></div></div>
-        <div style="font-size:0.75rem;color:var(--muted);min-width:20px;font-weight:700;">${count}</div>
-      </div>
-    `;
-  }).join('');
+  const catIds = new Set(state.categories.map(c => c.id));
+  const visualData = state.categories.map(c => {
+    const catGames = visibleGames.filter(g => g.catId === c.id);
+    const selected = catGames.filter(g => (g.selection || []).includes(VISUAL_SELECTION)).length;
+    return { name: catNotionName(c), selected, total: catGames.length };
+  }).filter(c => c.total > 0).sort((a, b) => b.selected - a.selected);
+  const visualLibrary = visibleGames.filter(g => !(g.selection || []).includes(VISUAL_SELECTION)).length;
+  const visualSelected = visibleGames.length - visualLibrary;
+
+  document.getElementById('dash-visual').innerHTML = visualData.length === 0
+    ? '<div class="empty-state" style="padding:24px"><div class="empty-state-sub">Aucune catégorie</div></div>'
+    : [
+        ...visualData.map(c => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+            <div style="font-size:0.83rem;flex:1;color:var(--text-med);font-weight:600;">${c.name}</div>
+            <div style="font-size:0.75rem;color:var(--muted);font-weight:700;">${c.selected}<span style="opacity:0.5;">/${c.total}</span></div>
+            <div style="width:70px;"><div class="progress-bar" style="margin:0;"><div class="progress-fill" style="width:${c.total?Math.round(c.selected/c.total*100):0}%"></div></div></div>
+          </div>
+        `),
+        `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;">
+          <span style="color:var(--muted);">🖼 Sélectionnés</span><span style="color:var(--green-dark);">${visualSelected}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-top:4px;">
+          <span style="color:var(--muted);">📚 En bibliothèque</span><span style="color:var(--muted);">${visualLibrary}</span>
+        </div>`,
+      ].join('');
 }
 
 function renderOwnerFilters() {
