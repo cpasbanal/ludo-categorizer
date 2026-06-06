@@ -1136,6 +1136,27 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
         </div>
 
         <div class="card">
+          <div class="card-title"><span class="icon">🏷</span> Synchronisation des catégories</div>
+          <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:14px;line-height:1.6;">
+            Forcez la synchronisation des catégories entre la Ludothèque et Notion indépendamment d'une sync complète.
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button id="btn-push-cats" class="btn btn-secondary" onclick="pushCategoriesToNotion()"
+              data-tooltip="Remplace les options du champ Catégorie dans Notion par les catégories locales">
+              ⬆ Envoyer vers Notion
+            </button>
+            <button id="btn-pull-cats" class="btn btn-secondary" onclick="pullCategoriesFromNotion()"
+              data-tooltip="Importe les options du champ Catégorie de Notion et remplace les catégories locales">
+              ⬇ Importer depuis Notion
+            </button>
+          </div>
+          <div class="notion-info" style="margin-top:12px;margin-bottom:0;">
+            <strong>⬆ Envoyer</strong> : écrase les options Notion avec les catégories locales.<br>
+            <strong>⬇ Importer</strong> : écrase les catégories locales avec les options Notion.
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-title"><span class="icon">✨</span> Intelligence Artificielle</div>
           <p style="font-size:0.82rem;color:var(--text-med);margin-bottom:14px;line-height:1.6;">
             Catégorisez vos jeux automatiquement via <strong>OpenRouter</strong> — gratuit, sans carte bancaire.<br>
@@ -1736,6 +1757,7 @@ const AUTO_HIDDEN_OWNER_NAMES = new Set([
   'JB et Julie',
   'Lucile',
   'Les joueurs anonymes',
+  'Médiathèque Illiers'
 ]);
 let ownersList = [];
 let _ownersByKey = new Map();   // key → { owner, index } — rebuilt by _rebuildOwnerMap
@@ -1925,6 +1947,50 @@ async function importCategoriesFromNotion() {
   } catch(e) {
     dbg('Import catégories Notion échoué : ' + e.message, 'warn');
     return false;
+  }
+}
+
+async function pushCategoriesToNotion() {
+  if (!notion) { toast('Notion non configuré', 'warn'); return; }
+  if (!notion.m.propCategorie) { toast('Propriété catégorie non configurée', 'warn'); return; }
+  if (!state.categories.length) { toast('Aucune catégorie locale à envoyer', 'warn'); return; }
+  const btn = document.getElementById('btn-push-cats');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
+  try {
+    const opts = state.categories.map(c => ({ name: catNotionName(c), color: 'default' }));
+    await notion._req(`/databases/${notion.dbId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties: { [notion.m.propCategorie]: { select: { options: opts } } } })
+    });
+    toast(`${opts.length} catégories envoyées vers Notion`, 'success');
+    dbg(`pushCategoriesToNotion: ${opts.length} options mises à jour`, 'ok');
+  } catch(e) {
+    toast('Erreur envoi vers Notion : ' + e.message, 'warn');
+    dbg('pushCategoriesToNotion échoué : ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬆ Envoyer vers Notion'; }
+  }
+}
+
+async function pullCategoriesFromNotion() {
+  if (!notion) { toast('Notion non configuré', 'warn'); return; }
+  const btn = document.getElementById('btn-pull-cats');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Import…'; }
+  try {
+    const ok = await importCategoriesFromNotion();
+    if (ok) {
+      populateCategorySelects();
+      renderCatFilters();
+      renderCategoryPage();
+      toast(`${state.categories.length} catégories importées depuis Notion`, 'success');
+    } else {
+      toast('Aucune catégorie trouvée dans Notion', 'warn');
+    }
+  } catch(e) {
+    toast('Erreur import depuis Notion : ' + e.message, 'warn');
+    dbg('pullCategoriesFromNotion échoué : ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Importer depuis Notion'; }
   }
 }
 
