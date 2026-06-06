@@ -1957,7 +1957,7 @@ async function pushCategoriesToNotion() {
   const btn = document.getElementById('btn-push-cats');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
   try {
-    const opts = state.categories.map(c => ({ name: catNotionName(c), color: 'default' }));
+    const opts = state.categories.map(c => ({ name: catNotionName(c) }));
     await notion._req(`/databases/${notion.dbId}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties: { [notion.m.propCategorie]: { select: { options: opts } } } })
