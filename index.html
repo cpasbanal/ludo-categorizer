@@ -1957,7 +1957,14 @@ async function pushCategoriesToNotion() {
   const btn = document.getElementById('btn-push-cats');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Envoi…'; }
   try {
-    const opts = state.categories.map(c => ({ name: catNotionName(c) }));
+    const db = await notion._req(`/databases/${notion.dbId}`);
+    const existingOpts = db.properties?.[notion.m.propCategorie]?.select?.options || [];
+    const existingByName = new Map(existingOpts.map(o => [o.name, o]));
+    const opts = state.categories.map(c => {
+      const name = catNotionName(c);
+      const ex = existingByName.get(name);
+      return ex ? { id: ex.id, name: ex.name, color: ex.color } : { name };
+    });
     await notion._req(`/databases/${notion.dbId}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties: { [notion.m.propCategorie]: { select: { options: opts } } } })
