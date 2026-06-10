@@ -1994,7 +1994,8 @@ async function pullCategoriesFromNotion() {
     if (ok) {
       populateCategorySelects();
       renderCatFilters();
-      renderCategoryPage();
+      renderCatGrid();
+      if (document.getElementById('page-visual')?.classList.contains('active')) renderVisualGrid();
       toast(`${state.categories.length} catégories importées depuis Notion`, 'success');
     } else {
       toast('Aucune catégorie trouvée dans Notion', 'warn');
@@ -2252,6 +2253,7 @@ async function manualSync() {
   renderCatGrid();
   renderDashboard();
   updateSidebarStats();
+  if (document.getElementById('page-visual')?.classList.contains('active')) renderVisualGrid();
 }
 
 function notionPagesToGames(pages) {
@@ -3072,7 +3074,7 @@ function renderKeywordList() {
   ).join('');
 }
 
-function saveCategory() {
+async function saveCategory() {
   const name  = document.getElementById('cat-name-input').value.trim();
   if (!name) { toast('Entrez un nom', 'warn'); return; }
   const emoji    = document.getElementById('cat-emoji-input').value.trim() || '🎲';
@@ -3086,7 +3088,9 @@ function saveCategory() {
     if (state.categories.some(c => c.id !== editId && c.name.toLowerCase() === name.toLowerCase())) {
       toast('Une catégorie avec ce nom existe déjà', 'warn'); return;
     }
+    const oldNotionName = catNotionName(cat);
     cat.name = name; cat.emoji = emoji; cat.desc = desc; cat.keywords = keywords;
+    const newNotionName = catNotionName(cat);
     saveCategories();
     populateCategorySelects();
     renderCatFilters();
@@ -3096,6 +3100,21 @@ function saveCategory() {
     updateSidebarStats();
     closeModal('modal-add-category');
     toast(`Catégorie "${name}" mise à jour`, 'success');
+    if (notion && notion.m.propCategorie && oldNotionName !== newNotionName) {
+      try {
+        const db = await notion._req(`/databases/${notion.dbId}`);
+        const existingOpts = db.properties?.[notion.m.propCategorie]?.select?.options || [];
+        const opts = existingOpts.map(o => o.name === oldNotionName ? { id: o.id, name: newNotionName, color: o.color } : o);
+        if (!opts.some(o => o.name === newNotionName)) opts.push({ name: newNotionName });
+        await notion._req(`/databases/${notion.dbId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ properties: { [notion.m.propCategorie]: { select: { options: opts } } } })
+        });
+        toast(`Catégorie "${newNotionName}" synchronisée avec Notion`, 'success');
+      } catch(e) {
+        toast('Notion : ' + e.message, 'warn');
+      }
+    }
   } else {
     addCategoryData({ name, emoji, desc, keywords });
     saveCategories();
