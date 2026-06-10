@@ -382,8 +382,13 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
   min-height: 100px; transition: all 0.15s;
 }
 .cat-card-new:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
-.cat-drag-handle { cursor: grab; color: var(--muted); padding: 0 4px; opacity: 0.35; transition: opacity 0.15s; user-select: none; font-size: 1rem; line-height: 1; }
-.cat-drag-handle:hover { opacity: 1; }
+.cat-drag-handle { cursor: grab; color: var(--muted); padding: 0 6px; opacity: 0; pointer-events: none; transition: opacity 0.15s, color 0.15s; user-select: none; font-size: 1.1rem; line-height: 1; }
+.cat-drag-handle:active { cursor: grabbing; }
+.cat-drag-handle:hover { color: var(--green); opacity: 1; }
+.cat-grid.reorder-mode .cat-drag-handle { opacity: 0.7; pointer-events: auto; }
+.cat-grid.reorder-mode .cat-drag-handle:hover { opacity: 1; color: var(--green); }
+.cat-grid.reorder-mode .cat-card { cursor: default; }
+.btn-reorder-active { background: var(--green-light) !important; border-color: var(--green-mid) !important; color: var(--green-dark) !important; }
 .thumb-grid { display: flex; flex-wrap: wrap; gap: 8px; min-height: 80px; padding: 4px 0; }
 .game-thumb-wrap { position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border); cursor: pointer; flex-shrink: 0; background: var(--surface2); transition: border-color 0.15s, transform 0.15s; }
 .game-thumb-wrap:hover { border-color: var(--green-mid); transform: scale(1.05); }
@@ -869,6 +874,7 @@ label { font-size: 0.77rem; color: var(--muted); display: block; margin-bottom: 
           <div class="page-title">Catégories</div>
         </div>
         <div class="topbar-actions">
+          <button id="btn-reorder-cats" class="btn btn-secondary" onclick="toggleCatReorderMode()" data-tooltip="Activer le mode réorganisation pour glisser-déposer les catégories">⇅ Réorganiser</button>
           <button class="btn btn-secondary" onclick="openRecatModal()" data-tooltip="Catégoriser automatiquement avec l'IA">↻ Recatégoriser</button>
           <button class="btn btn-primary tt-left" onclick="openAddCategory()" data-tooltip="Créer une nouvelle catégorie">+ Nouvelle</button>
         </div>
@@ -3283,6 +3289,14 @@ function renderCatGrid() {
     </div>
   `;
   addCatDragListeners();
+}
+
+function toggleCatReorderMode() {
+  const grid = document.getElementById('cat-grid');
+  const btn  = document.getElementById('btn-reorder-cats');
+  if (!grid) return;
+  const isOn = grid.classList.toggle('reorder-mode');
+  if (btn) btn.classList.toggle('btn-reorder-active', isOn);
 }
 
 // ============================
